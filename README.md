@@ -43,16 +43,16 @@ skill-optimizer plan --project-root . --output reports/plan
 skill-optimizer check ./path/to/skill --output reports/check
 
 # Preview apply
-skill-optimizer apply --plan reports/plan/optimization-plan.json
+skill-optimizer apply --plan reports/plan/optimization-plan.json --project-root .
 
 # Apply after explicit approval
-skill-optimizer apply --plan reports/plan/optimization-plan.json --execute --confirm
+skill-optimizer apply --plan reports/plan/optimization-plan.json --execute --confirm --project-root .
 
 # Rollback a snapshot
-skill-optimizer rollback <snapshot_id>
+skill-optimizer rollback <snapshot_id> --project-root .
 ```
 
-Filters:
+Filters (after the subcommand):
 
 ```bash
 skill-optimizer audit --scope user --scope project --platform cursor --output reports/cursor

@@ -23,52 +23,58 @@ def _configure_logging(verbose: bool) -> None:
     )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="skill-optimizer",
-        description="Audit, optimize, and safely maintain Agent Skills ecosystems",
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
-    parser.add_argument("--config", type=Path, help="Path to YAML config")
-    parser.add_argument(
+def _shared_options() -> argparse.ArgumentParser:
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("-v", "--verbose", action="store_true", help="Debug logging")
+    parent.add_argument("--config", type=Path, help="Path to YAML config")
+    parent.add_argument(
         "--project-root",
         type=Path,
         default=None,
         help="Project root for project-scoped skill discovery (default: cwd)",
     )
-    parser.add_argument(
+    parent.add_argument(
         "--scope",
         action="append",
         choices=["user", "project", "builtin", "all"],
         help="Limit scopes (repeatable)",
     )
-    parser.add_argument(
+    parent.add_argument(
         "--platform",
         action="append",
         choices=["cursor", "claude", "codex", "agents", "all"],
         help="Limit platforms (repeatable)",
     )
-    parser.add_argument(
+    parent.add_argument(
         "--extra-root",
         action="append",
         type=Path,
         default=[],
         help="Extra skill root directory (repeatable)",
     )
-    parser.add_argument(
+    parent.add_argument(
         "--output",
         type=Path,
         default=Path("reports"),
         help="Output directory for reports (default: ./reports)",
     )
+    return parent
+
+
+def build_parser() -> argparse.ArgumentParser:
+    shared = _shared_options()
+    parser = argparse.ArgumentParser(
+        prog="skill-optimizer",
+        description="Audit, optimize, and safely maintain Agent Skills ecosystems",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("audit", help="Diagnose skills without applying changes")
-    sub.add_parser("plan", help="Build an optimization plan (read-only)")
+    sub.add_parser("audit", parents=[shared], help="Diagnose skills without applying changes")
+    sub.add_parser("plan", parents=[shared], help="Build an optimization plan (read-only)")
 
-    apply_p = sub.add_parser("apply", help="Apply an approved optimization plan")
+    apply_p = sub.add_parser("apply", parents=[shared], help="Apply an approved optimization plan")
     apply_p.add_argument(
         "--plan",
         type=Path,
@@ -98,10 +104,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply only these recommendation_id values (repeatable)",
     )
 
-    check_p = sub.add_parser("check", help="Validate a single skill directory or SKILL.md")
+    check_p = sub.add_parser(
+        "check", parents=[shared], help="Validate a single skill directory or SKILL.md"
+    )
     check_p.add_argument("skill_path", type=Path, help="Skill directory or SKILL.md path")
 
-    rb = sub.add_parser("rollback", help="Restore skills from a snapshot")
+    rb = sub.add_parser("rollback", parents=[shared], help="Restore skills from a snapshot")
     rb.add_argument("snapshot_id", help="Snapshot id under .skill-optimizer/snapshots/")
 
     return parser
@@ -136,7 +144,7 @@ def _make_config(args: argparse.Namespace):
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    _configure_logging(args.verbose)
+    _configure_logging(bool(getattr(args, "verbose", False)))
     cfg = _make_config(args)
     output = Path(args.output).resolve()
 
@@ -173,7 +181,6 @@ def main(argv: list[str] | None = None) -> int:
                 recommendation_ids=list(args.only) or None,
             )
             print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
-            # Also write execution manifest copy into reports
             output.mkdir(parents=True, exist_ok=True)
             (output / "execution-manifest.json").write_text(
                 json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n",
@@ -190,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except Exception as exc:
         logging.getLogger(__name__).error("%s", exc)
-        if args.verbose:
+        if getattr(args, "verbose", False):
             raise
         return 1
 
