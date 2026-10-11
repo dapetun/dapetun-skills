@@ -11,7 +11,7 @@ from skill_optimizer.pipeline import run_audit_merge, run_audit_static
 from skill_optimizer.planner import top_actions
 
 REPO = Path(__file__).resolve().parents[2]
-RUN_PY = REPO / "skill-optimizer" / "scripts" / "run.py"
+RUN_PY = REPO / "scripts" / "run.py"
 
 
 def test_static_phase_writes_clusters(cfg, tmp_path: Path):

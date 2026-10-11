@@ -70,7 +70,7 @@ def _shared_options() -> argparse.ArgumentParser:
 def build_parser() -> argparse.ArgumentParser:
     shared = _shared_options()
     parser = argparse.ArgumentParser(
-        prog="skill-optimizer",
+        prog="skills-optimizer",
         description="Audit, optimize, and safely maintain Agent Skills ecosystems",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dapetun/skills-organizer/semantic-findings.schema.json",
+  "$id": "https://github.com/dapetun/skills-optimizer/semantic-findings.schema.json",
   "title": "HostSemanticFindings",
   "type": "object",
   "required": ["findings"],

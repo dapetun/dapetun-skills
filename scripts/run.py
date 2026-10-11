@@ -2,7 +2,7 @@
 """Zero-install entrypoint for the skill-optimizer Agent Skill.
 
 Usage (from any cwd):
-  python path/to/skill-optimizer/scripts/run.py audit --project-root . --output reports
+  python path/to/skills-optimizer/scripts/run.py audit --project-root . --output reports
 """
 
 from __future__ import annotations

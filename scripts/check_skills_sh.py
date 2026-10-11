@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check skills.sh listing status for dapetun/skills-organizer."""
+"""Check skills.sh listing status for dapetun/skills-optimizer."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ import json
 import re
 import urllib.request
 
-OWNER_REPO = "dapetun/skills-organizer"
-SKILL = "skill-optimizer"
+OWNER_REPO = "dapetun/skills-optimizer"
+SKILL = "skills-optimizer"
 PAGE = f"https://www.skills.sh/{OWNER_REPO}/{SKILL}"
 REPO_PAGE = f"https://www.skills.sh/{OWNER_REPO}"
-SEARCH = "https://www.skills.sh/api/search?q=dapetun%2Fskills-organizer"
-SEARCH2 = "https://www.skills.sh/api/search?q=skill-optimizer%20dapetun"
+SEARCH = "https://www.skills.sh/api/search?q=dapetun%2Fskills-optimizer"
+SEARCH2 = "https://www.skills.sh/api/search?q=skills-optimizer%20dapetun"
 
 
 def fetch(url: str) -> tuple[int, str]:
-    req = urllib.request.Request(url, headers={"User-Agent": "skills-organizer-check/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "skills-optimizer-check/1.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.status, resp.read().decode("utf-8", errors="replace")
 
@@ -29,7 +29,7 @@ def main() -> int:
     print(f"skill_page: {PAGE}")
     print(f"  http: {status}")
     print(f"  title: {title.group(1) if title else None}")
-    print(f"  has_skill_body: {'Optimize coherence' in html or 'Skill Optimizer' in html}")
+    print(f"  has_skill_body: {'Optimize coherence' in html or 'Skills Optimizer' in html}")
     print(f"  install_mentions: {installs[:10]}")
     print(f"  soft404: {'NEXT_HTTP_ERROR_FALLBACK;404' in html}")
 
@@ -47,8 +47,7 @@ def main() -> int:
             hits = [
                 s
                 for s in data.get("skills", [])
-                if "dapetun/skills-organizer" in str(s.get("id", ""))
-                or s.get("source") == OWNER_REPO
+                if OWNER_REPO in str(s.get("id", "")) or s.get("source") == OWNER_REPO
             ]
             print(f"{label}: total={data.get('count')} ours={len(hits)}")
             for h in hits[:5]:

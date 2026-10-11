@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "skill-optimizer"
+name = "skills-optimizer"
 version = "0.2.0"
 description = "Audit, optimize, and safely maintain Agent Skills ecosystems"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [{ name = "dapetun" }]
-keywords = ["agent-skills", "cursor", "claude-code", "codex", "optimization", "skills.sh"]
+keywords = ["agent-skills", "skills.sh", "cursor", "claude-code", "codex", "optimization"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -31,22 +31,20 @@ dev = [
 ]
 
 [project.scripts]
+skills-optimizer = "skill_optimizer.cli:main"
 skill-optimizer = "skill_optimizer.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/dapetun/skills-organizer"
+Homepage = "https://github.com/dapetun/skills-optimizer"
 Specification = "https://agentskills.io/specification"
 
-[tool.setuptools.package-dir]
-"" = "skill-optimizer"
-
 [tool.setuptools.packages.find]
-where = ["skill-optimizer"]
+where = ["."]
 include = ["skill_optimizer*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["skill-optimizer"]
+pythonpath = ["."]
 addopts = "-q"
 
 [tool.coverage.run]

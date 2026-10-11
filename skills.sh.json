@@ -5,7 +5,7 @@
     {
       "title": "Optimization",
       "description": "Audit and safely improve Agent Skills libraries.",
-      "skills": ["skill-optimizer"]
+      "skills": ["skills-optimizer"]
     }
   ]
 }

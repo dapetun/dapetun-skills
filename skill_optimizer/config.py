@@ -12,7 +12,7 @@ from skill_optimizer.simple_yaml import SimpleYAMLError, loads as yaml_loads
 
 logger = logging.getLogger(__name__)
 
-# skill-optimizer/skill_optimizer/config.py -> skill-optimizer/
+# skill_optimizer/config.py -> repository / skill root
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = SKILL_ROOT / "config" / "default.yaml"
 
