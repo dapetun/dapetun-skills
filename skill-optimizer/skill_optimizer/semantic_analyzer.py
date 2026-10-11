@@ -1,9 +1,16 @@
-"""Heuristic (and optional LLM-assisted) semantic analysis of skills."""
+"""Heuristic semantic analysis + host-LLM finding merge helpers.
+
+Deep semantic judgment is performed by the host agent (the LLM running the skill),
+which writes semantic-findings.json. This module provides deterministic heuristics
+and utilities to load/validate host findings.
+"""
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Protocol
+from pathlib import Path
+from typing import Any
 
 from skill_optimizer.config import OptimizerConfig
 from skill_optimizer.models import (
@@ -13,7 +20,6 @@ from skill_optimizer.models import (
     Severity,
     SkillRecord,
 )
-from skill_optimizer.security import compile_injection_patterns, redact_for_llm
 from skill_optimizer.textutil import (
     contradiction_pairs,
     jaccard,
@@ -22,51 +28,187 @@ from skill_optimizer.textutil import (
 
 logger = logging.getLogger(__name__)
 
-
-class SemanticProvider(Protocol):
-    def analyze_cluster(self, skills: list[SkillRecord]) -> list[Finding]:
-        """Optional LLM-backed cluster analysis."""
-
-
-class NullSemanticProvider:
-    """Baseline provider: no external LLM calls."""
-
-    def analyze_cluster(self, skills: list[SkillRecord]) -> list[Finding]:
-        return []
+_SEVERITY_MAP = {
+    "critical": Severity.CRITICAL,
+    "high": Severity.HIGH,
+    "medium": Severity.MEDIUM,
+    "low": Severity.LOW,
+    "info": Severity.INFO,
+}
 
 
+def analyze_heuristic_semantic(
+    skills: list[SkillRecord],
+    cfg: OptimizerConfig,
+) -> list[Finding]:
+    """Baseline semantic heuristics (no external LLM API)."""
+    findings: list[Finding] = []
+    findings.extend(_capability_overlaps(skills, cfg))
+    findings.extend(_scope_shadows(skills))
+    findings.extend(_instruction_conflicts(skills))
+    findings.extend(_complements(skills))
+    findings.extend(_multi_skill_clusters(skills, cfg))
+    logger.info("Heuristic semantic analyzer produced %d findings", len(findings))
+    return findings
+
+
+# Backward-compatible alias used by older call sites/tests
 def analyze_semantic(
     skills: list[SkillRecord],
     cfg: OptimizerConfig,
-    provider: SemanticProvider | None = None,
+    provider: Any = None,
 ) -> list[Finding]:
-    findings: list[Finding] = []
-    findings.extend(_capability_overlaps(skills, cfg))
-    findings.extend(_scope_shadows(skills, cfg))
-    findings.extend(_instruction_conflicts(skills, cfg))
-    findings.extend(_complements(skills, cfg))
-    findings.extend(_multi_skill_clusters(skills, cfg))
+    del provider
+    return analyze_heuristic_semantic(skills, cfg)
 
-    provider = provider or NullSemanticProvider()
-    if bool(cfg.llm.get("enabled", False)):
-        # Content is redacted before any provider use.
-        patterns = compile_injection_patterns(list(cfg.security.get("injection_patterns", [])))
-        safe_skills = []
-        for skill in skills:
-            clone_notes = redact_for_llm(
-                f"{skill.description}\n{skill.body}", patterns
-            )
-            logger.debug("Prepared redacted LLM payload for %s (%d chars)", skill.name, len(clone_notes))
-            safe_skills.append(skill)
+
+def build_clusters_for_host(
+    skills: list[SkillRecord],
+    findings: list[Finding],
+) -> list[dict[str, Any]]:
+    """Build compact cluster payloads for host-LLM semantic review."""
+    by_id = {s.skill_id: s for s in skills}
+    clusters: list[dict[str, Any]] = []
+    used: set[str] = set()
+
+    # Multi-skill findings first
+    for finding in findings:
+        if len(finding.skill_ids) < 2:
+            continue
+        key = tuple(sorted(finding.skill_ids))
+        key_s = "|".join(key)
+        if key_s in used:
+            continue
+        used.add(key_s)
+        members = []
+        for sid in finding.skill_ids:
+            skill = by_id.get(sid)
+            if not skill:
+                continue
+            members.append(_skill_brief(skill))
+        if len(members) < 2:
+            continue
+        clusters.append(
+            {
+                "cluster_id": f"cluster-{len(clusters)+1:03d}",
+                "reason": finding.relation.value,
+                "seed_finding_id": finding.finding_id,
+                "skills": members,
+            }
+        )
+
+    # Solo structural / injection cases worth host review
+    for finding in findings:
+        if len(finding.skill_ids) != 1:
+            continue
+        if finding.severity not in {Severity.CRITICAL, Severity.HIGH}:
+            continue
+        sid = finding.skill_ids[0]
+        skill = by_id.get(sid)
+        if not skill:
+            continue
+        clusters.append(
+            {
+                "cluster_id": f"solo-{len(clusters)+1:03d}",
+                "reason": finding.relation.value,
+                "seed_finding_id": finding.finding_id,
+                "skills": [_skill_brief(skill)],
+            }
+        )
+    return clusters
+
+
+def _skill_brief(skill: SkillRecord) -> dict[str, Any]:
+    return {
+        "skill_id": skill.skill_id,
+        "name": skill.name,
+        "path": str(skill.path),
+        "skill_md_path": str(skill.skill_md_path),
+        "scope": skill.scope.value,
+        "platform": skill.platform.value,
+        "description": skill.description,
+        "capabilities": skill.capabilities[:20],
+        "triggers": skill.triggers[:20],
+        "exclusions": skill.exclusions[:20],
+        "body_excerpt": (skill.body or "")[:1200],
+        "structural_issues": skill.structural_issues,
+        "injection_flags": skill.injection_flags,
+    }
+
+
+def load_host_semantic_findings(
+    path: Path,
+    skills: list[SkillRecord],
+) -> list[Finding]:
+    """Load semantic-findings.json produced by the host agent."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to load host semantic findings %s: %s", path, exc)
+        return []
+
+    known = {s.skill_id for s in skills}
+    name_to_ids: dict[str, list[str]] = {}
+    for s in skills:
+        name_to_ids.setdefault(s.name, []).append(s.skill_id)
+
+    raw_findings = data.get("findings", data if isinstance(data, list) else [])
+    out: list[Finding] = []
+    for i, item in enumerate(raw_findings):
+        if not isinstance(item, dict):
+            continue
+        skill_ids = list(item.get("skill_ids") or [])
+        # Allow host to reference by name
+        if not skill_ids and item.get("skill_names"):
+            for name in item["skill_names"]:
+                skill_ids.extend(name_to_ids.get(name, []))
+        skill_ids = [sid for sid in skill_ids if sid in known]
+        if not skill_ids and item.get("skill_names"):
+            # Keep unresolved names as empty — skip
+            logger.warning("Host finding skipped; unknown skills: %s", item.get("skill_names"))
+            continue
         try:
-            findings.extend(provider.analyze_cluster(safe_skills))
-        except Exception as exc:  # pragma: no cover - provider-specific
-            logger.warning("LLM semantic provider failed; continuing with heuristics: %s", exc)
-    else:
-        logger.info("LLM semantic analysis disabled; using heuristic baseline only")
-
-    logger.info("Semantic analyzer produced %d findings", len(findings))
-    return findings
+            relation = RelationType(str(item.get("relation", "OVERLAPS")))
+        except ValueError:
+            relation = RelationType.OVERLAPS
+        severity = _SEVERITY_MAP.get(str(item.get("severity", "medium")).lower(), Severity.MEDIUM)
+        evidence = []
+        for ev in item.get("evidence") or []:
+            if not isinstance(ev, dict):
+                continue
+            evidence.append(
+                Evidence(
+                    kind=str(ev.get("kind", "host_llm")),
+                    detail=str(ev.get("detail", "")),
+                    files=list(ev.get("files") or []),
+                    metrics=dict(ev.get("metrics") or {}),
+                )
+            )
+        fid = str(item.get("finding_id") or f"host-{i+1:03d}")
+        out.append(
+            Finding(
+                finding_id=fid if fid.startswith("host-") else f"host-{fid}",
+                relation=relation,
+                severity=severity,
+                confidence=float(item.get("confidence", 0.7)),
+                skill_ids=skill_ids,
+                title=str(item.get("title") or "Host semantic finding"),
+                summary=str(item.get("summary") or ""),
+                evidence=evidence
+                or [
+                    Evidence(
+                        kind="host_llm",
+                        detail="Provided by host agent semantic review",
+                        files=[],
+                    )
+                ],
+                false_positive_risk=str(item.get("false_positive_risk", "medium")),
+            )
+        )
+    logger.info("Loaded %d host semantic findings from %s", len(out), path)
+    return out
 
 
 def _capability_overlaps(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Finding]:
@@ -86,7 +228,6 @@ def _capability_overlaps(skills: list[SkillRecord], cfg: OptimizerConfig) -> lis
             if cap_score < cap_min and trig_score < trig_min:
                 continue
 
-            # Similar text with clearly different exclusions => specialization, not merge.
             specialization = _looks_like_specialization(a, b)
             if specialization and cap_score < 0.85:
                 findings.append(
@@ -151,14 +292,12 @@ def _capability_overlaps(skills: list[SkillRecord], cfg: OptimizerConfig) -> lis
 
 def _looks_like_specialization(a: SkillRecord, b: SkillRecord) -> bool:
     if a.exclusions or b.exclusions:
-        # If one excludes what the other targets, treat as specialization.
         a_excl = token_set(" ".join(a.exclusions))
         b_trig = token_set(" ".join(b.triggers + b.capabilities))
         b_excl = token_set(" ".join(b.exclusions))
         a_trig = token_set(" ".join(a.triggers + a.capabilities))
         if len(a_excl & b_trig) >= 2 or len(b_excl & a_trig) >= 2:
             return True
-    # Different primary nouns in names often indicate specialization
     if a.name != b.name and a.name.split("-")[0] != b.name.split("-")[0]:
         shared = token_set(a.description) & token_set(b.description)
         if len(shared) <= 5:
@@ -166,8 +305,7 @@ def _looks_like_specialization(a: SkillRecord, b: SkillRecord) -> bool:
     return False
 
 
-def _scope_shadows(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Finding]:
-    del cfg  # thresholds unused; shadowing is structural by scope
+def _scope_shadows(skills: list[SkillRecord]) -> list[Finding]:
     by_name: dict[str, list[SkillRecord]] = {}
     for skill in skills:
         by_name.setdefault(skill.name, []).append(skill)
@@ -202,14 +340,12 @@ def _scope_shadows(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Find
     return findings
 
 
-def _instruction_conflicts(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Finding]:
-    del cfg
+def _instruction_conflicts(skills: list[SkillRecord]) -> list[Finding]:
     findings: list[Finding] = []
     for i, a in enumerate(skills):
         for b in skills[i + 1 :]:
             pairs = contradiction_pairs(a.exclusions, b.capabilities + b.triggers)
             pairs += contradiction_pairs(b.exclusions, a.capabilities + a.triggers)
-            # Also detect opposing imperative lines sharing subject tokens
             opposing = _opposing_imperatives(a.body, b.body)
             if not pairs and not opposing:
                 continue
@@ -273,9 +409,7 @@ def _opposing_imperatives(body_a: str, body_b: str) -> list[str]:
     return details
 
 
-def _complements(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Finding]:
-    """DEPENDS_ON when one skill references another's name/path as a prerequisite."""
-    del cfg
+def _complements(skills: list[SkillRecord]) -> list[Finding]:
     findings: list[Finding] = []
     names = {s.name: s for s in skills}
     for skill in skills:
@@ -306,9 +440,7 @@ def _complements(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Findin
 
 
 def _multi_skill_clusters(skills: list[SkillRecord], cfg: OptimizerConfig) -> list[Finding]:
-    """Find clusters of 3+ skills with pairwise capability overlap."""
     cap_min = float(cfg.thresholds.get("capability_overlap_min", 0.5))
-    # Build undirected adjacency
     ids = [s.skill_id for s in skills]
     index = {s.skill_id: s for s in skills}
     adj: dict[str, set[str]] = {i: set() for i in ids}

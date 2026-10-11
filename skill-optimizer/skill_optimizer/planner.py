@@ -21,6 +21,14 @@ from skill_optimizer.models import (
 
 logger = logging.getLogger(__name__)
 
+_SEVERITY_FLOOR = {
+    "critical": 5,
+    "high": 4,
+    "medium": 3,
+    "low": 2,
+    "info": 1,
+}
+
 
 def build_plan(
     skills: list[SkillRecord],
@@ -29,23 +37,35 @@ def build_plan(
 ) -> OptimizationPlan:
     by_id = {s.skill_id: s for s in skills}
     min_conf = float(cfg.thresholds.get("min_confidence_report", 0.45))
-    recommendations: list[Recommendation] = []
-    used_pairs: set[tuple[str, ...]] = set()
+    min_sev = _SEVERITY_FLOOR.get(str(cfg.min_severity).lower(), 3)
 
+    actionable = [
+        f
+        for f in findings
+        if f.confidence >= min_conf
+        and f.relation not in {RelationType.COMPLEMENTS, RelationType.DEPENDS_ON}
+    ]
+    clustered_findings = _cluster_findings(actionable)
+
+    recommendations: list[Recommendation] = []
+    used_ops: set[tuple[str, tuple[str, ...]]] = set()
     ordered = sorted(
-        findings,
+        clustered_findings,
         key=lambda f: (-severity_rank(f.severity), -f.confidence, f.finding_id),
     )
     for finding in ordered:
-        if finding.confidence < min_conf:
-            continue
         rec = _recommendation_for_finding(finding, by_id)
         if rec is None:
             continue
-        key = (rec.operation.value, tuple(sorted(rec.skill_ids)))
-        if key in used_pairs:
+        if rec.operation in {OperationType.NO_CHANGE}:
             continue
-        used_pairs.add(key)
+        if severity_rank(finding.severity) < min_sev and finding.relation != RelationType.DUPLICATE:
+            # Keep critical duplicates even if filter is high; otherwise respect floor
+            continue
+        key = (rec.operation.value, tuple(sorted(rec.skill_ids)))
+        if key in used_ops:
+            continue
+        used_ops.add(key)
         recommendations.append(rec)
 
     if not recommendations:
@@ -54,9 +74,9 @@ def build_plan(
                 recommendation_id=f"rec-{uuid.uuid4().hex[:10]}",
                 operation=OperationType.NO_CHANGE,
                 skill_ids=[s.skill_id for s in skills],
-                rationale="No actionable issues above confidence threshold.",
+                rationale="No actionable issues above confidence/severity thresholds.",
                 expected_benefit="Preserve current skill ecosystem coherence.",
-                risks=["Missing a subtle conflict that heuristics did not detect."],
+                risks=["Missing a subtle conflict that heuristics/host review did not detect."],
                 verification_criteria=[
                     "Re-run audit after adding/editing skills",
                     "Confirm routing on representative prompts still matches intent",
@@ -75,10 +95,95 @@ def build_plan(
             "Do not merge skills based solely on textual similarity.",
             "Read-only by default; apply requires explicit confirmation.",
             "Third-party/builtin skills are never modified.",
+            "Deep semantic judgment comes from the host agent via semantic-findings.json.",
+            f"Recommendations clustered; min_severity={cfg.min_severity}.",
         ],
     )
     logger.info("Optimization plan %s with %d recommendations", plan.plan_id, len(recommendations))
     return plan
+
+
+def _cluster_findings(findings: list[Finding]) -> list[Finding]:
+    """Collapse pairwise overlap/conflict findings into connected components."""
+    multi_rels = {
+        RelationType.OVERLAPS,
+        RelationType.POTENTIAL_MERGE,
+        RelationType.CONFLICTS,
+        RelationType.SHADOWS,
+        RelationType.DUPLICATE,
+    }
+    multi = [f for f in findings if len(f.skill_ids) >= 2 and f.relation in multi_rels]
+    solo = [f for f in findings if len(f.skill_ids) < 2]
+
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for finding in multi:
+        ids = finding.skill_ids
+        for i in range(1, len(ids)):
+            union(ids[0], ids[i])
+
+    groups: dict[str, list[Finding]] = {}
+    for finding in multi:
+        root = find(finding.skill_ids[0])
+        groups.setdefault(root, []).append(finding)
+
+    representatives: list[Finding] = []
+    for group in groups.values():
+        best = max(
+            group,
+            key=lambda f: (severity_rank(f.severity), f.confidence),
+        )
+        # Expand skill_ids to full component
+        member_ids: set[str] = set()
+        for f in group:
+            member_ids.update(f.skill_ids)
+        representatives.append(
+            Finding(
+                finding_id=best.finding_id,
+                relation=best.relation,
+                severity=best.severity,
+                confidence=best.confidence,
+                skill_ids=sorted(member_ids),
+                title=best.title
+                if len(member_ids) <= 2
+                else f"Cluster issue ({len(member_ids)} skills): {best.title}",
+                summary=best.summary,
+                evidence=best.evidence,
+                false_positive_risk=best.false_positive_risk,
+            )
+        )
+
+    # Solo: keep one per skill_id (highest severity)
+    solo_best: dict[str, Finding] = {}
+    for finding in solo:
+        key = finding.skill_ids[0] if finding.skill_ids else finding.finding_id
+        prev = solo_best.get(key)
+        if prev is None or severity_rank(finding.severity) > severity_rank(prev.severity):
+            solo_best[key] = finding
+
+    return representatives + list(solo_best.values())
+
+
+def top_actions(plan: OptimizationPlan, limit: int = 10) -> list[Recommendation]:
+    actionable = [
+        r
+        for r in plan.recommendations
+        if r.operation
+        not in {OperationType.NO_CHANGE}
+    ]
+    return sorted(actionable, key=lambda r: (r.priority, r.recommendation_id))[:limit]
 
 
 def _recommendation_for_finding(
@@ -114,8 +219,39 @@ def _recommendation_for_finding(
             },
         )
 
-    if any("Invalid YAML" in finding.summary or "Missing required" in finding.summary for _ in [1]):
-        if finding.relation == RelationType.CONFLICTS and len(finding.skill_ids) == 1:
+    if finding.relation == RelationType.CONFLICTS and len(skills) == 1:
+        skill = skills[0] if skills else by_id.get(finding.skill_ids[0]) if finding.skill_ids else None
+        if skill and skill.injection_flags:
+            return Recommendation(
+                recommendation_id=rid,
+                operation=OperationType.REWRITE_INSTRUCTIONS,
+                skill_ids=finding.skill_ids,
+                rationale="Prompt-injection-like markers found in untrusted skill content.",
+                expected_benefit="Reduce risk of instruction hijack when agents load the skill.",
+                risks=["Legitimate security examples may look like injection patterns."],
+                verification_criteria=[
+                    "Injection markers removed or clearly quarantined as examples",
+                    "Skill still describes the intended workflow",
+                ],
+                priority=1,
+                patch_hints={"injection_flags": skill.injection_flags},
+            )
+        if skill and skill.broken_links:
+            return Recommendation(
+                recommendation_id=rid,
+                operation=OperationType.FIX_STRUCTURE,
+                skill_ids=finding.skill_ids,
+                rationale=finding.summary,
+                expected_benefit="Repair broken references so progressive disclosure works.",
+                risks=["Referenced files may have been intentionally removed."],
+                verification_criteria=["All relative links resolve under the skill root"],
+                priority=_priority(finding),
+                patch_hints={"broken_links": skill.broken_links},
+            )
+        if skill and (
+            skill.frontmatter.parse_error
+            or any("Missing required" in i or "Invalid YAML" in i for i in skill.structural_issues)
+        ):
             return Recommendation(
                 recommendation_id=rid,
                 operation=OperationType.FIX_STRUCTURE,
@@ -129,35 +265,6 @@ def _recommendation_for_finding(
                 ],
                 priority=_priority(finding),
                 patch_hints={"issues": [e.detail for e in finding.evidence]},
-            )
-
-    if finding.relation == RelationType.CONFLICTS and len(skills) == 1:
-        if finding.skill_ids[0] in by_id and by_id[finding.skill_ids[0]].broken_links:
-            return Recommendation(
-                recommendation_id=rid,
-                operation=OperationType.FIX_STRUCTURE,
-                skill_ids=finding.skill_ids,
-                rationale=finding.summary,
-                expected_benefit="Repair broken references so progressive disclosure works.",
-                risks=["Referenced files may have been intentionally removed."],
-                verification_criteria=["All relative links resolve under the skill root"],
-                priority=_priority(finding),
-                patch_hints={"broken_links": by_id[finding.skill_ids[0]].broken_links},
-            )
-        if finding.skill_ids[0] in by_id and by_id[finding.skill_ids[0]].injection_flags:
-            return Recommendation(
-                recommendation_id=rid,
-                operation=OperationType.REWRITE_INSTRUCTIONS,
-                skill_ids=finding.skill_ids,
-                rationale="Prompt-injection-like markers found in untrusted skill content.",
-                expected_benefit="Reduce risk of instruction hijack when agents load the skill.",
-                risks=["Legitimate security examples may look like injection patterns."],
-                verification_criteria=[
-                    "Injection markers removed or clearly quarantined as examples",
-                    "Skill still describes the intended workflow",
-                ],
-                priority=1,
-                patch_hints={"injection_flags": by_id[finding.skill_ids[0]].injection_flags},
             )
         return Recommendation(
             recommendation_id=rid,
@@ -218,7 +325,6 @@ def _recommendation_for_finding(
         )
 
     if finding.relation == RelationType.POTENTIAL_MERGE:
-        # Only recommend merge when confidence high AND not marked specialization-like.
         if finding.false_positive_risk == "medium" and finding.confidence < 0.9:
             return Recommendation(
                 recommendation_id=rid,
@@ -284,37 +390,10 @@ def _recommendation_for_finding(
             priority=_priority(finding),
         )
 
-    if finding.relation == RelationType.COMPLEMENTS:
-        return Recommendation(
-            recommendation_id=rid,
-            operation=OperationType.NO_CHANGE,
-            skill_ids=finding.skill_ids,
-            rationale=finding.summary,
-            expected_benefit="Keep complementary specialization intact.",
-            risks=[],
-            verification_criteria=["Specialized skills still activate on their distinct probes"],
-            priority=90,
-            requires_confirmation=False,
-        )
-
-    if finding.relation == RelationType.DEPENDS_ON:
-        return Recommendation(
-            recommendation_id=rid,
-            operation=OperationType.NO_CHANGE,
-            skill_ids=finding.skill_ids,
-            rationale=finding.summary,
-            expected_benefit="Documented dependency retained.",
-            risks=[],
-            verification_criteria=["Dependent skill still references an existing skill"],
-            priority=95,
-            requires_confirmation=False,
-        )
-
     return None
 
 
 def _priority(finding: Finding) -> int:
-    # Lower number = higher priority
     base = {
         Severity.CRITICAL: 1,
         Severity.HIGH: 10,

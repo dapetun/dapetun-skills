@@ -58,6 +58,12 @@ def _shared_options() -> argparse.ArgumentParser:
         default=Path("reports"),
         help="Output directory for reports (default: ./reports)",
     )
+    parent.add_argument(
+        "--min-severity",
+        choices=["critical", "high", "medium", "low", "info"],
+        default=None,
+        help="Minimum severity for clustered recommendations (default: medium)",
+    )
     return parent
 
 
@@ -71,8 +77,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("audit", parents=[shared], help="Diagnose skills without applying changes")
-    sub.add_parser("plan", parents=[shared], help="Build an optimization plan (read-only)")
+    audit_p = sub.add_parser("audit", parents=[shared], help="Diagnose skills without applying changes")
+    audit_p.add_argument(
+        "--phase",
+        choices=["static", "merge", "full"],
+        default="static",
+        help="static=deterministic pass + clusters; merge=include host semantic-findings.json",
+    )
+    audit_p.add_argument(
+        "--semantic-findings",
+        type=Path,
+        default=None,
+        help="Path to host-written semantic-findings.json (default: <output>/semantic-findings.json)",
+    )
+
+    plan_p = sub.add_parser("plan", parents=[shared], help="Build an optimization plan (read-only)")
+    plan_p.add_argument(
+        "--semantic-findings",
+        type=Path,
+        default=None,
+        help="Path to host-written semantic-findings.json",
+    )
 
     apply_p = sub.add_parser("apply", parents=[shared], help="Apply an approved optimization plan")
     apply_p.add_argument(
@@ -138,6 +163,7 @@ def _make_config(args: argparse.Namespace):
         platforms=platforms,
         scopes=scopes,
         extra_skill_roots=list(args.extra_root or []),
+        min_severity=getattr(args, "min_severity", None),
     )
 
 
@@ -149,8 +175,30 @@ def main(argv: list[str] | None = None) -> int:
     output = Path(args.output).resolve()
 
     try:
-        if args.command in {"audit", "plan"}:
-            result = run_audit(cfg, output) if args.command == "audit" else run_plan(cfg, output)
+        if args.command == "audit":
+            result = run_audit(
+                cfg,
+                output,
+                phase=args.phase,
+                semantic_findings_path=args.semantic_findings,
+            )
+            print(f"Phase: {result.get('phase', args.phase)}")
+            print(f"Skills: {len(result['skills'])}")
+            print(f"Findings: {len(result['findings'])}")
+            if "clusters" in result:
+                print(f"Clusters for host review: {len(result['clusters'])}")
+            print(f"Plan: {result['plan'].plan_id}")
+            print(f"Reports: {output}")
+            for key, path in result["paths"].items():
+                print(f"  - {key}: {path}")
+            return 0
+
+        if args.command == "plan":
+            result = run_plan(
+                cfg,
+                output,
+                semantic_findings_path=getattr(args, "semantic_findings", None),
+            )
             print(f"Skills: {len(result['skills'])}")
             print(f"Findings: {len(result['findings'])}")
             print(f"Plan: {result['plan'].plan_id}")

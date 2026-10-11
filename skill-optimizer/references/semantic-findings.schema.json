@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dapetun/skills-organizer/semantic-findings.schema.json",
+  "title": "HostSemanticFindings",
+  "type": "object",
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["relation", "severity", "summary"],
+        "properties": {
+          "finding_id": { "type": "string" },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "DUPLICATE",
+              "OVERLAPS",
+              "CONFLICTS",
+              "COMPLEMENTS",
+              "DEPENDS_ON",
+              "SHADOWS",
+              "POTENTIAL_MERGE"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"]
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "skill_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "skill_names": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "false_positive_risk": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string" },
+                "detail": { "type": "string" },
+                "files": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,98 @@
+# Default Skill Optimizer configuration
+# All thresholds are tunable; semantic similarity is never the sole conflict criterion.
+
+platforms:
+  - cursor
+  - claude
+  - codex
+  - agents
+
+scopes:
+  - user
+  - project
+  - builtin
+
+discovery:
+  max_depth: 8
+  follow_symlinks: false
+  skip_dir_names:
+    - .git
+    - node_modules
+    - __pycache__
+    - .venv
+    - venv
+    - dist
+    - build
+  related_files:
+    - AGENTS.md
+    - CLAUDE.md
+    - .cursorrules
+
+thresholds:
+  exact_duplicate_hash: true
+  body_jaccard_overlap: 0.85
+  description_jaccard_overlap: 0.75
+  capability_overlap_min: 0.5
+  trigger_overlap_min: 0.4
+  potential_merge_jaccard: 0.7
+  broad_description_max_chars: 800
+  broad_description_min_triggers: 12
+  min_confidence_report: 0.45
+  instruction_line_repeat_min: 3
+
+weights:
+  exact_duplicate: 1.0
+  structural: 0.95
+  conflict: 0.9
+  overlap: 0.7
+  shadow: 0.65
+  merge_candidate: 0.55
+  complement: 0.2
+
+security:
+  treat_skill_content_as_untrusted: true
+  block_path_traversal: true
+  never_execute_skill_scripts: true
+  redact_injection_markers_in_llm_prompts: true
+  injection_patterns:
+    - '(?i)ignore\s+(all\s+)?previous\s+instructions'
+    - '(?i)disregard\s+(all\s+)?prior'
+    - '(?i)system\s*:\s*'
+    - '(?i)<\|?(system|assistant|endoftext)\|?>'
+    - '(?i)you\s+are\s+now\s+'
+    - '(?i)reveal\s+(your\s+)?(system|hidden)\s+prompt'
+
+cache:
+  enabled: true
+  directory: ".skill-optimizer/cache"
+
+apply:
+  read_only_default: true
+  require_confirmation: true
+  snapshot_directory: ".skill-optimizer/snapshots"
+  staging_directory: ".skill-optimizer/staging"
+  allow_edit_scopes:
+    - user
+    - project
+  forbid_edit_origins:
+    - builtin
+    - plugin_cache
+    - third_party_readonly
+
+validation:
+  simulate_routing: true
+  runtime_tests: false
+  capability_retention_min: 1.0
+
+reporting:
+  min_severity: medium
+  formats:
+    - inventory.json
+    - findings.json
+    - skill-graph.json
+    - optimization-plan.json
+    - audit-report.md
+    - validation-report.json
+    - execution-manifest.json
+    - clusters.json
+    - semantic-findings.json

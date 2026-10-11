@@ -7,8 +7,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from skill_optimizer.models import Frontmatter, SkillRecord, SkillResource
 from skill_optimizer.security import (
     compile_injection_patterns,
@@ -16,6 +14,7 @@ from skill_optimizer.security import (
     resolve_under_root,
     safe_read_text,
 )
+from skill_optimizer.simple_yaml import SimpleYAMLError, loads as yaml_loads
 from skill_optimizer.textutil import (
     estimate_tokens,
     extract_capabilities,
@@ -39,8 +38,8 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any] | None, str, str | None
     raw_yaml = match.group(1)
     body = match.group(2) or ""
     try:
-        data = yaml.safe_load(raw_yaml)
-    except yaml.YAMLError as exc:
+        data = yaml_loads(raw_yaml)
+    except SimpleYAMLError as exc:
         return None, body, f"Invalid YAML frontmatter: {exc}"
     if data is None:
         data = {}

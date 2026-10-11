@@ -26,3 +26,7 @@ Thumbs.db
 reports/
 tmp/
 temp/
+.claude/
+AGENTS.md
+uv.lock
+.skill-optimizer/

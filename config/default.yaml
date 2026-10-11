@@ -10,7 +10,6 @@ platforms:
 scopes:
   - user
   - project
-  # built-in skills are discovered as read-only and never modified
   - builtin
 
 discovery:
@@ -24,7 +23,6 @@ discovery:
     - venv
     - dist
     - build
-  # Non-skill instruction files are noted but never treated as skills
   related_files:
     - AGENTS.md
     - CLAUDE.md
@@ -37,7 +35,7 @@ thresholds:
   capability_overlap_min: 0.5
   trigger_overlap_min: 0.4
   potential_merge_jaccard: 0.7
-  broad_description_max_chars: 900
+  broad_description_max_chars: 800
   broad_description_min_triggers: 12
   min_confidence_report: 0.45
   instruction_line_repeat_min: 3
@@ -57,12 +55,12 @@ security:
   never_execute_skill_scripts: true
   redact_injection_markers_in_llm_prompts: true
   injection_patterns:
-    - "(?i)ignore\\s+(all\\s+)?previous\\s+instructions"
-    - "(?i)disregard\\s+(all\\s+)?prior"
-    - "(?i)system\\s*:\\s*"
-    - "(?i)<\\|?(system|assistant|endoftext)\\|?>"
-    - "(?i)you\\s+are\\s+now\\s+"
-    - "(?i)reveal\\s+(your\\s+)?(system|hidden)\\s+prompt"
+    - '(?i)ignore\s+(all\s+)?previous\s+instructions'
+    - '(?i)disregard\s+(all\s+)?prior'
+    - '(?i)system\s*:\s*'
+    - '(?i)<\|?(system|assistant|endoftext)\|?>'
+    - '(?i)you\s+are\s+now\s+'
+    - '(?i)reveal\s+(your\s+)?(system|hidden)\s+prompt'
 
 cache:
   enabled: true
@@ -87,6 +85,7 @@ validation:
   capability_retention_min: 1.0
 
 reporting:
+  min_severity: medium
   formats:
     - inventory.json
     - findings.json
@@ -95,8 +94,5 @@ reporting:
     - audit-report.md
     - validation-report.json
     - execution-manifest.json
-
-llm:
-  enabled: false
-  provider: null
-  # When enabled, LLM only assists semantic analysis; heuristic baseline always runs.
+    - clusters.json
+    - semantic-findings.json

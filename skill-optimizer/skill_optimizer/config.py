@@ -8,12 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+from skill_optimizer.simple_yaml import SimpleYAMLError, loads as yaml_loads
 
 logger = logging.getLogger(__name__)
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG_PATH = PACKAGE_ROOT / "config" / "default.yaml"
+# skill-optimizer/skill_optimizer/config.py -> skill-optimizer/
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG_PATH = SKILL_ROOT / "config" / "default.yaml"
 
 
 @dataclass
@@ -24,6 +25,7 @@ class OptimizerConfig:
     platforms: list[str] = field(default_factory=list)
     scopes: list[str] = field(default_factory=list)
     extra_skill_roots: list[Path] = field(default_factory=list)
+    min_severity: str = "medium"
 
     @property
     def thresholds(self) -> dict[str, Any]:
@@ -53,10 +55,6 @@ class OptimizerConfig:
     def validation(self) -> dict[str, Any]:
         return self.raw.get("validation", {})
 
-    @property
-    def llm(self) -> dict[str, Any]:
-        return self.raw.get("llm", {})
-
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(base)
@@ -71,8 +69,10 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 def load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Config not found: {path}")
-    with path.open("r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+    try:
+        data = yaml_loads(path.read_text(encoding="utf-8")) or {}
+    except SimpleYAMLError as exc:
+        raise ValueError(f"Invalid YAML config {path}: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"Config root must be a mapping: {path}")
     return data
@@ -86,6 +86,7 @@ def load_config(
     platforms: list[str] | None = None,
     scopes: list[str] | None = None,
     extra_skill_roots: list[Path] | None = None,
+    min_severity: str | None = None,
 ) -> OptimizerConfig:
     base = load_yaml(DEFAULT_CONFIG_PATH) if DEFAULT_CONFIG_PATH.exists() else {}
     if config_path is not None:
@@ -98,6 +99,7 @@ def load_config(
         platforms=platforms or list(base.get("platforms", [])),
         scopes=scopes or list(base.get("scopes", [])),
         extra_skill_roots=list(extra_skill_roots or []),
+        min_severity=min_severity or str(base.get("reporting", {}).get("min_severity", "medium")),
     )
     logger.debug(
         "Loaded config project_root=%s platforms=%s scopes=%s",
@@ -124,7 +126,6 @@ def default_skill_roots(cfg: OptimizerConfig) -> list[SkillRoot]:
     roots: list[SkillRoot] = []
 
     mapping: list[tuple[str, str, str, bool, Path]] = [
-        # Cursor
         ("cursor", "project", "local", True, project / ".cursor" / "skills"),
         ("cursor", "user", "local", True, home / ".cursor" / "skills"),
         (
@@ -134,13 +135,10 @@ def default_skill_roots(cfg: OptimizerConfig) -> list[SkillRoot]:
             False,
             home / ".cursor" / "skills-cursor",
         ),
-        # Universal agents
         ("agents", "project", "local", True, project / ".agents" / "skills"),
         ("agents", "user", "local", True, home / ".agents" / "skills"),
-        # Claude Code
         ("claude", "project", "local", True, project / ".claude" / "skills"),
         ("claude", "user", "local", True, home / ".claude" / "skills"),
-        # Codex
         ("codex", "project", "local", True, project / ".codex" / "skills"),
         ("codex", "user", "local", True, home / ".codex" / "skills"),
         ("codex", "project", "local", True, project / ".agents" / "skills"),

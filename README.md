@@ -1,120 +1,74 @@
 # Skill Optimizer
 
-Audit, optimize, and safely maintain [Agent Skills](https://agentskills.io/specification) ecosystems across **Cursor**, **Claude Code**, **Codex**, and universal `.agents/skills` paths.
+Audit, optimize, and safely maintain [Agent Skills](https://agentskills.io/specification) across **Cursor**, **Claude Code**, **Codex**, and `.agents/skills`.
 
-**Priority:** diagnostic quality → minimal necessary changes → verification. The goal is ecosystem coherence and routing effectiveness, not minimizing skill count or tokens at any cost.
-
-## Features
-
-- **Discovery** of user/project/builtin skills with platform adapters
-- **Static analysis** (YAML frontmatter, structure, exact duplicates, broken links)
-- **Semantic heuristics** (capabilities, triggers, conflicts, clusters, specialization vs duplication)
-- **Conflict graph** with `DUPLICATE`, `OVERLAPS`, `CONFLICTS`, `COMPLEMENTS`, `DEPENDS_ON`, `SHADOWS`, `POTENTIAL_MERGE`
-- **Optimization planner** with verifiable recommendations
-- **Safe apply** (read-only default, diffs, snapshots, staging, rollback)
-- **Validation** with simulated routing metrics (no fabricated “measured” values)
-- **Baseline mode without LLM/embeddings** (optional LLM hook, disabled by default)
-- Treats skill content as **untrusted** (injection detection, path traversal guards, never executes skill scripts)
+Install once. Ask your agent to optimize skills. No pip, no API keys.
 
 ## Install
 
 ```bash
+npx skills add dapetun/skills-organizer --skill skill-optimizer
+```
+
+That is the only required step. The skill ships with Python stdlib tooling inside the skill folder.
+
+## Use
+
+In your agent chat:
+
+- “Optimize my skills”
+- “Audit duplicate Agent Skills”
+- `/skill-optimizer`
+
+The host agent runs the deterministic scanner, then **you (the model in that chat)** do the semantic review. There is no external LLM API.
+
+Typical flow the skill follows:
+
+1. Static audit → `clusters.json`
+2. Host semantic review → `semantic-findings.json`
+3. Merge → `audit-report.md` with **Top actions**
+4. Apply only after you confirm
+
+## Manual CLI (optional)
+
+From the installed skill directory:
+
+```bash
+python path/to/skill-optimizer/scripts/run.py audit --phase static --project-root . --output .skill-optimizer/out
+python path/to/skill-optimizer/scripts/run.py audit --phase merge --project-root . --output .skill-optimizer/out
+python path/to/skill-optimizer/scripts/run.py apply --plan .skill-optimizer/out/optimization-plan.json --execute --confirm
+```
+
+Flags: `--scope`, `--platform`, `--min-severity`, `--config`, `--dry-run` / `--execute --confirm`.
+
+## Dev / tests
+
+```bash
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-# source .venv/bin/activate
-
+# Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-```
-
-Requires Python 3.10+.
-
-## CLI
-
-```bash
-# Diagnose (no writes)
-skill-optimizer audit --project-root . --output reports/audit
-
-# Build plan artifacts
-skill-optimizer plan --project-root . --output reports/plan
-
-# Check one skill
-skill-optimizer check ./path/to/skill --output reports/check
-
-# Preview apply
-skill-optimizer apply --plan reports/plan/optimization-plan.json --project-root .
-
-# Apply after explicit approval
-skill-optimizer apply --plan reports/plan/optimization-plan.json --execute --confirm --project-root .
-
-# Rollback a snapshot
-skill-optimizer rollback <snapshot_id> --project-root .
-```
-
-Filters (after the subcommand):
-
-```bash
-skill-optimizer audit --scope user --scope project --platform cursor --output reports/cursor
-skill-optimizer audit --extra-root ./my-skills --config ./config/default.yaml
-```
-
-## Reports
-
-| File | Description |
-| --- | --- |
-| `inventory.json` | Catalog of discovered skills |
-| `findings.json` | Issues with evidence, severity, confidence |
-| `skill-graph.json` | Relationship graph |
-| `optimization-plan.json` | Recommendations + verification criteria |
-| `audit-report.md` | Human-readable summary |
-| `validation-report.json` | Checks + metrics |
-| `execution-manifest.json` | Apply history / last apply result |
-
-Metrics include routing accuracy, false activation rate, capability retention, structural validity, unresolved conflicts, and context cost. Values are reported as **measured** only when corresponding tests ran; otherwise they are `n/a` with notes.
-
-## Agent skill
-
-This repo includes a meta-skill at [`skill-optimizer/SKILL.md`](skill-optimizer/SKILL.md). Copy or symlink it into your skills directory, or point agents at this repository.
-
-## Configuration
-
-See [`config/default.yaml`](config/default.yaml) for platforms, discovery roots, thresholds, weights, security patterns, cache, and apply policy.
-
-## Tests
-
-```bash
 pytest
-# or
-pytest --cov=skill_optimizer
 ```
 
-Synthetic fixture library under `tests/fixtures/skill_library` covers duplicates, specialization, conflicts, scope shadows, broad descriptions, broken YAML/links, merges, clusters, stale plans, rollback, injection, and the healthy no-change case.
+Runtime for end users does **not** need this install.
 
-## Architecture
+## Layout
 
 ```
-src/skill_optimizer/
-  discovery.py          # locate skills
-  parser.py             # SKILL.md + agentskills.io validation
-  static_analyzer.py    # structure / duplicates
-  semantic_analyzer.py  # capabilities / conflicts (LLM optional)
-  conflict_graph.py     # relation graph
-  planner.py            # recommendations
-  validation.py         # simulation + retention checks
-  apply_engine.py       # snapshots / staging / rollback
-  reporting.py          # artifacts
-  cli.py                # audit|plan|apply|check|rollback
+skill-optimizer/           # what skills.sh installs
+  SKILL.md
+  scripts/run.py
+  skill_optimizer/         # Python package (stdlib only)
+  config/default.yaml
+  references/
 ```
 
-Python owns deterministic analysis and safe mutation. LLM assistance is optional and never required.
+## Safety
 
-## Safety notes
-
-- Builtin / plugin-cache skills are discovered as non-editable
-- Apply refuses writes without `--execute --confirm`
-- Plans embed content hashes; changed skills invalidate apply
-- Analyzed skill bodies are never executed
+- Analyzed skill content is untrusted
+- Builtin / plugin-cache skills are never edited
+- Apply requires explicit confirmation + content-hash checks
+- Snapshots + rollback on failure
 
 ## License
 

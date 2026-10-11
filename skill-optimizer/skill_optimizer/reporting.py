@@ -13,7 +13,9 @@ from skill_optimizer.models import (
     OptimizationPlan,
     SkillRecord,
     ValidationResult,
+    severity_rank,
 )
+from skill_optimizer.planner import top_actions
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,11 @@ def write_audit_report_md(
     findings: list[Finding],
     plan: OptimizationPlan,
     metrics: MetricsSnapshot,
+    *,
+    next_step: str | None = None,
 ) -> None:
+    actions = top_actions(plan, limit=10)
+    filtered = max(0, len(findings) - len(actions))
     lines: list[str] = []
     lines.append("# Skill Optimizer Audit Report")
     lines.append("")
@@ -72,7 +78,20 @@ def write_audit_report_md(
     lines.append(f"- Skills inventoried: **{len(skills)}**")
     lines.append(f"- Findings: **{len(findings)}**")
     lines.append(f"- Recommendations: **{len(plan.recommendations)}**")
+    lines.append(f"- Top actions shown: **{len(actions)}** (other signal compressed: {filtered})")
     lines.append(f"- Plan ID: `{plan.plan_id}`")
+    if next_step:
+        lines.append(f"- Next step: {next_step}")
+    lines.append("")
+    lines.append("## Top actions")
+    lines.append("")
+    if not actions:
+        lines.append("No actionable changes recommended.")
+    for i, rec in enumerate(actions, 1):
+        lines.append(f"{i}. `{rec.operation.value}` — {rec.rationale[:200]}")
+        lines.append(f"   - id: `{rec.recommendation_id}`")
+        lines.append(f"   - skills: {', '.join(rec.skill_ids)}")
+        lines.append(f"   - benefit: {rec.expected_benefit}")
     lines.append("")
     lines.append("## Metrics")
     lines.append("")
@@ -98,9 +117,13 @@ def write_audit_report_md(
     lines.append("")
     lines.append("## Findings (priority order)")
     lines.append("")
-    if not findings:
+    ordered = sorted(
+        findings,
+        key=lambda f: (-severity_rank(f.severity), -f.confidence, f.finding_id),
+    )
+    if not ordered:
         lines.append("No findings.")
-    for finding in findings:
+    for finding in ordered[:40]:
         lines.append(
             f"### {finding.severity.value.upper()} — {finding.title} (`{finding.finding_id}`)"
         )
@@ -113,6 +136,9 @@ def write_audit_report_md(
             lines.append("- Evidence:")
             for ev in finding.evidence[:5]:
                 lines.append(f"  - {ev.kind}: {ev.detail}")
+        lines.append("")
+    if len(ordered) > 40:
+        lines.append(f"_… {len(ordered) - 40} more findings in findings.json_")
         lines.append("")
     lines.append("## Optimization plan")
     lines.append("")
@@ -156,6 +182,7 @@ def write_all_reports(
     plan: OptimizationPlan,
     validation_results: list[ValidationResult],
     metrics: MetricsSnapshot,
+    next_step: str | None = None,
 ) -> dict[str, Path]:
     ensure_output_dir(output_dir)
     paths = {
@@ -171,8 +198,7 @@ def write_all_reports(
     write_json(paths["graph"], graph)
     write_plan(paths["plan"], plan)
     write_validation(paths["validation"], validation_results, metrics)
-    write_audit_report_md(paths["audit"], skills, findings, plan, metrics)
-    # Copy/update execution manifest pointer if present
-    manifest_src = skills[0].path.parents[0] if skills else None
-    del manifest_src
+    write_audit_report_md(
+        paths["audit"], skills, findings, plan, metrics, next_step=next_step
+    )
     return paths
