@@ -10,6 +10,12 @@ Install once. Ask your agent to optimize skills. No pip, no API keys.
 npx skills add dapetun/skills-organizer --skill skill-optimizer
 ```
 
+On [skills.sh](https://www.skills.sh/dapetun/skills-organizer/skill-optimizer):
+
+```bash
+npx skills add https://github.com/dapetun/skills-organizer --skill skill-optimizer
+```
+
 That is the only required step. The skill ships with Python stdlib tooling inside the skill folder.
 
 ## Use
