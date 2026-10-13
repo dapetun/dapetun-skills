@@ -4,8 +4,18 @@
   "groupings": [
     {
       "title": "Optimization",
-      "description": "Audit and safely improve Agent Skills libraries.",
+      "description": "Audit and improve Agent Skills libraries.",
       "skills": ["skills-optimizer"]
+    },
+    {
+      "title": "Evidence and compliance",
+      "description": "Fact/citation checks and regulatory screening via subagents.",
+      "skills": ["evidence-check", "compliance-hub"]
+    },
+    {
+      "title": "GitHub",
+      "description": "Repository discoverability for humans and agents.",
+      "skills": ["github-discoverability"]
     }
   ]
 }
