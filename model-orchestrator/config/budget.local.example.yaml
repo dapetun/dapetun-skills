@@ -1,0 +1,17 @@
+# Example snapshot written by scripts/sync_budget.py
+# Real file: config/budget.local.yaml (gitignored) — do not commit secrets or live spend.
+
+version: 1
+source: usage-summary
+auth_source: state.vscdb
+synced_at: "2026-10-04T15:00:00Z"
+billing_cycle_start: "2026-10-01T00:00:00.000Z"
+billing_cycle_end: "2026-11-01T00:00:00.000Z"
+membership_type: pro
+api_percent_used: 42.5
+auto_percent_used: 10.0
+spent_ratio: 0.425
+remaining_usd: 11.5
+other_models_monthly_usd: 20.0
+on_demand_enabled: false
+stale: false

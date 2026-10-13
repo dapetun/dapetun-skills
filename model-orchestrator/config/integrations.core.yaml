@@ -1,0 +1,14 @@
+# Core profile template - standalone router (no Hindsight / GitNexus required).
+# Applied by: pwsh -File .\scripts\install_skill.ps1 -Profile core
+# Privacy: retain is off; see docs/legal/privacy.md
+
+version: 1
+profile: core
+
+hindsight:
+  enabled: false
+  ondemand_repo: https://github.com/dapetun/cursor-hindsight-ondemand
+  mcp_server: hindsight
+
+gitnexus:
+  enabled: false

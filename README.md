@@ -13,6 +13,8 @@ npx skills add dapetun/dapetun-skills --skill skills-optimizer
 npx skills add dapetun/dapetun-skills --skill github-discoverability
 npx skills add dapetun/dapetun-skills --skill compliance-hub
 npx skills add dapetun/dapetun-skills --skill evidence-check
+npx skills add dapetun/dapetun-skills --skill model-orchestrator
+npx skills add dapetun/dapetun-skills --skill public-api-discovery
 ```
 
 ## Skills in this repo
@@ -23,8 +25,17 @@ npx skills add dapetun/dapetun-skills --skill evidence-check
 | `github-discoverability` | Discoverability GitHub-репозиториев (README, topics, AI-cite) |
 | `compliance-hub` | Единый compliance-вход (NDA, GDPR/DPA, EU AI Act, RU legal) через субагентов |
 | `evidence-check` | Факты и цитаты: bib-audit / claim-source / draft-facts через субагентов |
+| `model-orchestrator` | Маршрутизация моделей Cursor (tier / budget / `[route]`) |
+| `public-api-discovery` | Поиск публичных API без ключей и с понятными лимитами |
 
 На [skills.sh](https://skills.sh): после install telemetry страница репозитория обновляется автоматически.
+
+`model-orchestrator` раньше жил в отдельном репо `dapetun/cursor-model-orchestrator` — канон теперь здесь. Локальный install с `ORCHESTRATOR_ROOT`:
+
+```powershell
+cd model-orchestrator
+.\scripts\install_skill.ps1
+```
 
 ## Dev (skills-optimizer package)
 

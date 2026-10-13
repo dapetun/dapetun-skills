@@ -1,21 +1,10 @@
 {
-  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
-  "notGrouped": "bottom",
-  "groupings": [
-    {
-      "title": "Optimization",
-      "description": "Audit and improve Agent Skills libraries.",
-      "skills": ["skills-optimizer"]
-    },
-    {
-      "title": "Evidence and compliance",
-      "description": "Fact/citation checks and regulatory screening via subagents.",
-      "skills": ["evidence-check", "compliance-hub"]
-    },
-    {
-      "title": "GitHub",
-      "description": "Repository discoverability for humans and agents.",
-      "skills": ["github-discoverability"]
-    }
+  "skills": [
+    "skills-optimizer",
+    "github-discoverability",
+    "compliance-hub",
+    "evidence-check",
+    "model-orchestrator",
+    "public-api-discovery"
   ]
 }

@@ -30,3 +30,10 @@ temp/
 AGENTS.md
 uv.lock
 .skill-optimizer/
+
+# model-orchestrator local overlays
+model-orchestrator/config/projects.yaml
+model-orchestrator/config/budget.local.yaml
+model-orchestrator/ORCHESTRATOR_ROOT.txt
+
+skills-lock.json

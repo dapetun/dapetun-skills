@@ -1,0 +1,28 @@
+cursor-model-orchestrator
+Copyright (c) 2026 dapetun
+
+This product is licensed under the MIT License. See the LICENSE file.
+
+Third-party names and trademarks
+--------------------------------
+"Cursor" and related marks are trademarks of Anysphere, Inc. (or its affiliates).
+Model and product names (including without limitation Claude, Anthropic, GPT,
+OpenAI, Gemini, Google, Grok, xAI, Composer, and similar) are trademarks of
+their respective owners.
+
+This project is an independent, unofficial recommend-only skill for routing
+model choices inside the Cursor IDE. It is not affiliated with, endorsed by,
+or sponsored by Anysphere, Anthropic, OpenAI, Google, xAI, or any other model
+provider named in configuration or documentation.
+
+Use of those names is solely for identification of third-party products and
+services that the skill may recommend.
+
+Upstream / partner projects
+---------------------------
+- cursor-hindsight-ondemand — separate repository; own license and terms
+- GitNexus — separate upstream project; own license and terms
+
+Public documentation fetched by scripts/sync_models.py is owned by its
+publishers (e.g. Cursor docs). That script does not collect end-user personal
+data; it only refreshes a local model catalog from public pages.

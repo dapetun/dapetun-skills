@@ -1,0 +1,94 @@
+# Project type detection — path prefixes + filesystem markers
+# Copy to projects.yaml (gitignored) and edit paths for your machine:
+#   Copy-Item config/projects.example.yaml config/projects.yaml
+# Precedence: prompt tags > path_prefixes > markers > mixed
+
+version: 1
+
+tags:
+  "@ds": ds
+  "@paper": paper
+  "@web": web
+
+path_prefixes:
+  # Examples — replace with your absolute paths (Windows or POSIX)
+  - path: "/path/to/your-ds-repo"
+    type: ds
+  - path: "/path/to/your-paper-repo"
+    type: paper
+  - path: "/path/to/cursor-model-orchestrator"
+    type: cursor_meta
+
+# Substring match on workspace root (case-insensitive on Windows)
+path_contains:
+  - pattern: "thesis"
+    type: paper
+  - pattern: "article"
+    type: paper
+  - pattern: "cursor-model-orchestrator"
+    type: cursor_meta
+  - pattern: ".cursor\\skills"
+    type: cursor_meta
+  - pattern: ".cursor/skills"
+    type: cursor_meta
+
+markers:
+  ds:
+    any_files:
+      - "*.ipynb"
+    any_paths:
+      - "notebooks"
+      - "data"
+      - "ml"
+    requirements_packages:
+      - pandas
+      - sklearn
+      - scikit-learn
+      - torch
+      - statsmodels
+      - econometrics
+    files:
+      - pyproject.toml
+  paper:
+    any_files:
+      - "*.tex"
+    any_paths:
+      - "article"
+      - "paper"
+      - "thesis"
+    md_heavy_without_app: true
+  web:
+    files:
+      - package.json
+    any_files:
+      - "src/**/*.tsx"
+      - "src/**/*.jsx"
+      - "app/**/*.tsx"
+    any_paths:
+      - "components"
+  backend:
+    files:
+      - "Dockerfile"
+    any_paths:
+      - "api"
+      - "services"
+    requirements_packages:
+      - fastapi
+      - flask
+      - django
+  cursor_meta:
+    files:
+      - "SKILL.md"
+      - "mcp.json"
+    any_paths:
+      - ".cursor"
+      - "skill"
+
+marker_priority:
+  - cursor_meta
+  - paper
+  - ds
+  - web
+  - backend
+
+default_type: mixed

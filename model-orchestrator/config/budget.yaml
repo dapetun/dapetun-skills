@@ -1,0 +1,35 @@
+# Other Models pool budget policy (thresholds — committed)
+# Spend snapshot: run `python scripts/sync_budget.py` → config/budget.local.yaml (gitignored)
+# Skill prefers budget.local.yaml when fresh (see sync_ttl_minutes); else falls back here.
+
+version: 1
+
+# Display / derived remaining_usd = monthly * (1 - api_percent_used/100)
+# Cursor no longer publishes a stable dollar size for Other Models; 20.0 is Pro heuristic.
+other_models_monthly_usd: 20.0
+
+# Manual fallback when budget.local.yaml is missing (edit or sync)
+remaining_usd: 20.0
+
+warn_at_ratio: 0.8
+block_hard_other_at_ratio: 0.8
+
+# How often the skill should re-run sync_budget.py before classify (minutes)
+sync_ttl_minutes: 60
+
+# Set true after user says «разреши дорогие модели» or `/max force` this billing cycle
+hard_other_override: false
+
+updated_at: "2026-10-04"
+notes: >
+  Preferred: python scripts/sync_budget.py (reads local Cursor session → apiPercentUsed).
+  Chat: «синхронизируй бюджет» or /budget sync → force sync.
+  Manual: «бюджет remaining 12» → set remaining_usd when sync unavailable.
+  At spent_ratio >= warn_at_ratio → warn + block hard Other unless hard_other_override.
+  At spent_ratio >= 1 or remaining_usd <= 0 → force eco (Cursor Models only).
+
+# Manual commands (tell the agent in chat, Russian OK):
+#   «синхронизируй бюджет» / `/budget sync` → run sync_budget.py
+#   «бюджет remaining 12»  → set remaining_usd: 12 (manual fallback)
+#   «разреши дорогие модели» → hard_other_override: true
+#   «сброс бюджета» → remaining_usd back to monthly (new cycle / manual)
