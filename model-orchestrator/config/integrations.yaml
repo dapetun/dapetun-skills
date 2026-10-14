@@ -1,16 +1,14 @@
-# Stack profile template - enable soft deps on Hindsight + GitNexus.
-# Applied by: pwsh -File .\scripts\install_skill.ps1 -Profile stack
-# Privacy: when hindsight.enabled, retain lean route metadata ONLY — never prompts/PII
-# (see docs/hindsight-schema.md, docs/legal/privacy.md).
+# Core profile template - standalone router (no Hindsight / GitNexus required).
+# Applied by: pwsh -File .\scripts\install_skill.ps1 -Profile core
+# Privacy: retain is off; see docs/legal/privacy.md
 
 version: 1
-profile: stack
+profile: core
 
 hindsight:
-  enabled: true
+  enabled: false
   ondemand_repo: https://github.com/dapetun/cursor-hindsight-ondemand
   mcp_server: hindsight
-  # retain_policy: lean_route_only — enforced by skill instructions, not this file
 
 gitnexus:
-  enabled: true
+  enabled: false
