@@ -2,18 +2,20 @@
 
 Use when YAML configs are unavailable. Prefer `config/routes.yaml` when present.
 
-## Doctrine (v0.2)
+## Doctrine (v1 — Cursor models only)
 
-**Other Models plan / analyze. Composer or Grok execute code and file ops.**
-Never recommend Other for writing code.
+**Grok 4.7 standard plans / analyzes. Composer 2.5 standard executes code and file ops.**
+Third-party models are never in the matrix. Fast / 500k only if the user asked.
 
-| роль | Typical model (balance, budget OK) |
+| роль | Typical model (balance, pool OK) |
 | --- | --- |
-| план | Sonnet / Opus / Sol by tier |
-| код | Composer 2.5 (UI → Grok 4.7) |
-| анализ | Sonnet / Opus (science, paper Q&A) |
+| план | Grok 4.7 standard (не Fast) |
+| код | Composer 2.5 standard (не Fast) |
+| анализ | Grok 4.7 standard (не Fast) |
 
-## [route] machine fields (v0.2)
+Routine tiers may show **Auto Cost** when the plan offers Auto (Plus → Composer).
+
+## [route] machine fields (v1)
 
 ```text
 [route] project=… tier=… model=… mode=… pool=… budget=… shape=… роль=<план|код|анализ>
@@ -21,8 +23,8 @@ Never recommend Other for writing code.
 
 | Field | Values |
 | --- | --- |
-| pool | `cursor` \| `other` \| `mixed` |
-| budget | `ok` \| `warn` \| `exhausted` |
+| pool | `cursor` \| `paid` |
+| budget | `ok` \| `warn` \| `exhausted` \| `unknown` |
 | shape | `none` \| `mapper` \| `specialist` \| `pipeline` \| `hybrid` |
 | роль | `план` \| `код` \| `анализ` |
 
@@ -50,81 +52,74 @@ Stack Hindsight install: https://github.com/dapetun/cursor-hindsight-ondemand
 
 ## Modes
 
-- `eco` → Cursor pool only (Composer 2.5 / Grok 4.7 per tier)
-- `balance` → Auto/Composer execute; escalate plan/analyze to Other
-- `max` → stronger Other **planners** if budget allows; execute still Composer/Grok
+- `eco` → Composer 2.5 standard only
+- `balance` → Auto Cost / Composer routine; Grok plan/analyze on hard tiers; Composer code
+- `max` → Grok 4.7 standard for hard plan **and** heavy execute; still no Fast / no third-party
 
-## Tier → model (balance / budget OK)
+## Tier → model (balance / pool OK)
 
 | Tier | роль=план / анализ | роль=код |
 | --- | --- | --- |
-| quick_edit | — | Auto / Composer 2.5 |
-| default_code | — | Auto / Composer 2.5 |
-| research_docs | Auto / Composer (or analyze on Sonnet if deep) | Composer 2.5 |
-| cursor_meta | — | Composer 2.5 |
-| docs_office | Sonnet if academic prose | Composer 2.5 |
-| frontend_design | Claude Sonnet 5 | Grok 4.7 |
-| paper | Claude Sonnet 5 | Composer if tooling code |
-| science_stats | Claude Sonnet 5 (Q&A) | Composer 2.5 (implement) |
-| refactor_architecture | Claude Opus 5 | Composer 2.5 |
-| long_agent | Claude Opus 5 | Composer 2.5 |
+| quick_edit | — | Auto Cost / Composer 2.5 standard |
+| default_code | — | Auto Cost → Composer 2.5 standard |
+| research_docs | Auto Cost (max → Grok) | Composer 2.5 standard |
+| cursor_meta | — | Composer 2.5 standard |
+| docs_office | Auto Cost (academic → paper) | Composer 2.5 standard |
+| frontend_design | Grok 4.7 standard | Composer 2.5 standard |
+| paper | Grok 4.7 standard | Composer if tooling code |
+| science_stats | Grok 4.7 standard (Q&A) | Composer 2.5 standard (implement) |
+| refactor_architecture | Grok 4.7 standard | Composer 2.5 standard |
+| long_agent | Grok 4.7 standard | Composer 2.5 standard |
 | parallel_roles | advise role map | coder = Composer |
 
-## max mode upgrades (planners only)
+## max mode upgrades
 
-- science_stats / paper → Claude Opus 5
-- refactor / long_agent → GPT-5.6 Sol or Claude Opus 5
-- execute path unchanged (Composer / Grok)
+- Hard plan/execute → Grok 4.7 standard (не Fast, не xhigh as a price lever)
+- Still no third-party models
 
-## eco / exhausted / hard-block (shared Cursor-only matrix)
+## eco / exhausted / hard-block (Composer-only matrix)
 
-Triggers: `/eco`, `remaining_usd<=0`, hard-block@80% without override.
+Triggers: `/eco`, pool exhausted, hard-block@warn_ratio without HITL paid override.
 
 | Tier | Model |
 | --- | --- |
-| quick_edit | Composer 2.5 |
-| default_code | Auto / Composer 2.5 |
-| research_docs | Composer 2.5 |
-| cursor_meta | Composer 2.5 |
-| docs_office | Composer 2.5 (academic → paper) |
-| frontend_design | Grok 4.7 |
-| paper | Grok 4.7 (+ warning) |
-| science_stats | Grok 4.7 (+ **mandatory** science warning) |
-| refactor_architecture | Grok 4.7 |
-| long_agent | Grok 4.7 |
-| parallel_roles | role_map_exhausted |
+| all listed tiers | Composer 2.5 standard |
+| science_stats | Composer + **mandatory** science warning |
+| parallel_roles | role_map_exhausted (all Composer) |
 
-### role_map (budget OK)
+### role_map (pool OK)
 
 | Role | Model |
 | --- | --- |
-| planner | Claude Opus 5 |
-| coder | Composer 2.5 |
-| reviewer | Claude Sonnet 5 |
-| researcher | GPT-5.6 Terra |
-| verifier | Grok 4.7 |
-| scientist | Claude Opus 5 |
+| planner | Grok 4.7 standard |
+| coder | Composer 2.5 standard |
+| reviewer | Grok 4.7 standard |
+| researcher | Grok 4.7 standard |
+| verifier | Composer 2.5 standard |
+| scientist | Grok 4.7 standard |
 
 ### role_map_exhausted
 
 | Role | Model |
 | --- | --- |
-| planner | Grok 4.7 |
-| coder | Composer 2.5 |
-| reviewer | Grok 4.7 |
-| researcher | Grok 4.7 |
-| verifier | Grok 4.7 |
-| scientist | Grok 4.7 |
+| all | Composer 2.5 standard |
 
-Never show Other model names while Cursor-only.
+Never show third-party model names from the matrix.
 
-## Fable
+## Third-party HITL (one turn)
 
-Never without Russian HITL confirm.
+Ask yes/no with prepaid-credit warning. Fable: also note Anthropic stores input/output for harm-prevention.
+**да** → one `pool=paid` turn; next turn returns to Cursor matrix.
+**нет** → Cursor matrix this turn.
+
+## Subagent pins (only if user asked to spawn)
+
+- `composer-2.5[fast=false]` or `inherit` when parent is Composer/Grok standard
+- Never pass third-party model ids
 
 ## Handoff RU
 
-После approve переключи чат на Composer 2.5 и выполни план пошагово.
+После approve переключи чат на Composer 2.5 standard (не Fast) и выполни план пошагово.
 План должен быть достаточно подробным для Composer (файлы, шаги, критерии done).
 
 ## Budget sync
@@ -133,4 +128,4 @@ Never without Russian HITL confirm.
 python <root>/scripts/sync_budget.py
 ```
 
-`<root>` is `ORCHESTRATOR_ROOT.txt` or the directory that contains `SKILL.md`. Writes `<root>/config/budget.local.yaml` (`api_percent_used` = Other Models). Chat: «синхронизируй бюджет» / `/budget sync`. Auth: Cursor `state.vscdb` or `CURSOR_SESSION_TOKEN`. Never print tokens.
+`<root>` is `ORCHESTRATOR_ROOT.txt` or the directory that contains `SKILL.md`. Writes `<root>/config/budget.local.yaml` from the weekly Cursor-pool signal when the live payload confirms a field; otherwise `budget_source=unknown`. Chat: «синхронизируй бюджет» / `/budget sync`. Auth: Cursor `state.vscdb` or `CURSOR_SESSION_TOKEN`. Never print tokens.

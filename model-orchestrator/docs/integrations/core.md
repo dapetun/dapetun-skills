@@ -1,8 +1,9 @@
 # Core profile — standalone orchestrator
 
-**Last updated:** 2026-10-03
+**Last updated:** 2026-11-07
 
-Works **without** Hindsight or GitNexus. Recommend-only skill + YAML routing.
+Works **without** Hindsight or GitNexus. Recommend-only skill + YAML routing
+(Cursor models only: Composer 2.5 standard, Grok 4.7 standard, Auto Cost).
 
 ## Install
 
@@ -27,8 +28,8 @@ Restart Cursor or open a new Agent chat.
 ## What you get
 
 - Russian `[route]` with `tier`, `model`, `mode`, `pool`, `budget`, `shape`
-- Budget / eco / exhausted Cursor-only matrix
-- Fable HITL
+- Budget / eco / exhausted Composer-standard matrix (weekly Cursor pool)
+- One-turn HITL for explicit third-party / paid pins (not in the matrix)
 - **No** Hindsight retain (skipped silently)
 - **No** GitNexus requirements
 
@@ -39,8 +40,8 @@ Restart Cursor or open a new Agent chat.
 | `config/integrations.yaml` | `profile: core` after install |
 | `config/routes.yaml` | tiers, plan_shapes, exhausted matrix |
 | `config/projects.yaml` | local (gitignored); start from `projects.example.yaml` |
-| `config/budget.yaml` | Thresholds (`warn_at_ratio`, monthly heuristic) |
-| `config/budget.local.yaml` | Live Other Models % from `scripts/sync_budget.py` (gitignored) |
+| `config/budget.yaml` | Thresholds (`warn_at_ratio`, weekly Cursor-pool notes) |
+| `config/budget.local.yaml` | Live weekly Cursor-pool % from `scripts/sync_budget.py` (gitignored) |
 
 ## Verify
 

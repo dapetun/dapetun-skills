@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Sync Cursor Other Models usage into config/budget.local.yaml.
+"""Sync Cursor weekly-pool usage into config/budget.local.yaml.
 
-Auth (personal Pro — no official Usage API):
+Auth (no official public Usage API for agents):
   1. CURSOR_SESSION_TOKEN env (raw JWT or already-formed sub::jwt)
   2. Local Cursor state.vscdb key cursorAuth/accessToken
 
 Primary fetch: GET https://cursor.com/api/usage-summary
-  individualUsage.plan.apiPercentUsed  → Other Models pool
-  individualUsage.plan.autoPercentUsed → Cursor Models pool (informational)
+  individualUsage.plan.autoPercentUsed → candidate for weekly Cursor-models pool
+  individualUsage.plan.apiPercentUsed  → third-party / prepaid credit candidate
+
+Official docs (2026-11) name a weekly Cursor-models pool but do **not** document
+these JSON field names. This script treats autoPercentUsed as a heuristic for
+spent_ratio and sets budget_source=heuristic_auto_percent. If neither percent
+field is present, budget_source=unknown and spent_ratio is omitted.
 
 Fallback: POST https://cursor.com/api/dashboard/get-current-period-usage
 
@@ -204,20 +209,6 @@ def _http_json(
     return parsed
 
 
-def _read_monthly_usd() -> float:
-    if not BUDGET_POLICY.is_file():
-        return 20.0
-    text = BUDGET_POLICY.read_text(encoding="utf-8")
-    for line in text.splitlines():
-        stripped = line.split("#", 1)[0].strip()
-        if stripped.startswith("other_models_monthly_usd:"):
-            try:
-                return float(stripped.split(":", 1)[1].strip())
-            except ValueError:
-                break
-    return 20.0
-
-
 def _extract_from_usage_summary(data: dict[str, Any]) -> dict[str, Any] | None:
     plan = (
         (data.get("individualUsage") or {}).get("plan")
@@ -230,17 +221,20 @@ def _extract_from_usage_summary(data: dict[str, Any]) -> dict[str, Any] | None:
     auto = plan.get("autoPercentUsed")
     if api is None and auto is None:
         return None
-    return {
+    out: dict[str, Any] = {
         "source": "usage-summary",
         "billing_cycle_start": data.get("billingCycleStart"),
         "billing_cycle_end": data.get("billingCycleEnd"),
         "membership_type": data.get("membershipType"),
-        "api_percent_used": float(api if api is not None else 0.0),
-        "auto_percent_used": float(auto if auto is not None else 0.0),
         "on_demand_enabled": bool(
             ((data.get("individualUsage") or {}).get("onDemand") or {}).get("enabled")
         ),
     }
+    if api is not None:
+        out["api_percent_used"] = float(api)
+    if auto is not None:
+        out["auto_percent_used"] = float(auto)
+    return out
 
 
 def _extract_from_current_period(data: dict[str, Any]) -> dict[str, Any] | None:
@@ -256,15 +250,18 @@ def _extract_from_current_period(data: dict[str, Any]) -> dict[str, Any] | None:
     auto = plan.get("autoPercentUsed")
     if api is None and auto is None:
         return None
-    return {
+    out: dict[str, Any] = {
         "source": "get-current-period-usage",
         "billing_cycle_start": data.get("billingCycleStart"),
         "billing_cycle_end": data.get("billingCycleEnd"),
         "membership_type": data.get("membershipType"),
-        "api_percent_used": float(api if api is not None else 0.0),
-        "auto_percent_used": float(auto if auto is not None else 0.0),
         "on_demand_enabled": None,
     }
+    if api is not None:
+        out["api_percent_used"] = float(api)
+    if auto is not None:
+        out["auto_percent_used"] = float(auto)
+    return out
 
 
 def fetch_usage(cookie: str) -> dict[str, Any]:
@@ -279,34 +276,49 @@ def fetch_usage(cookie: str) -> dict[str, Any]:
 
 
 def build_snapshot(usage: dict[str, Any], auth_source: str) -> dict[str, Any]:
-    api = max(0.0, float(usage["api_percent_used"]))
-    auto = max(0.0, float(usage["auto_percent_used"]))
-    spent_ratio = min(api / 100.0, 1.0) if api <= 100 else api / 100.0
-    # Cap display remaining at 0 when over 100%
-    monthly = _read_monthly_usd()
-    remaining = max(0.0, round(monthly * (1.0 - min(spent_ratio, 1.0)), 4))
+    api_raw = usage.get("api_percent_used")
+    auto_raw = usage.get("auto_percent_used")
+    api = max(0.0, float(api_raw)) if api_raw is not None else None
+    auto = max(0.0, float(auto_raw)) if auto_raw is not None else None
+
+    # Prefer autoPercentUsed as weekly Cursor-pool heuristic. Official docs do
+    # not name this field; skill may treat budget as unknown until confirmed.
+    if auto is not None:
+        spent_ratio = auto / 100.0
+        budget_source = "heuristic_auto_percent"
+        spend_field = "auto_percent_used"
+    elif api is not None:
+        # Do not use api% as weekly pool — record unknown so hard tiers are not blocked.
+        spent_ratio = None
+        budget_source = "unknown"
+        spend_field = "unknown"
+    else:
+        spent_ratio = None
+        budget_source = "unknown"
+        spend_field = "unknown"
+
+    auth_label = "state.vscdb" if auth_source.startswith("state.vscdb:") else auth_source.split(":")[0]
     snap: dict[str, Any] = {
-        "version": 1,
+        "version": 2,
         "source": usage["source"],
-        "auth_source": auth_source.split(":")[0],  # never full path with user home in committed docs; keep short in file
+        "auth_source": auth_label,
         "synced_at": _utcnow_iso(),
         "billing_cycle_start": usage.get("billing_cycle_start"),
         "billing_cycle_end": usage.get("billing_cycle_end"),
         "membership_type": usage.get("membership_type"),
-        "api_percent_used": round(api, 6),
-        "auto_percent_used": round(auto, 6),
-        "spent_ratio": round(min(spent_ratio, 1.0) if api <= 100 else spent_ratio, 6),
-        "remaining_usd": remaining,
-        "other_models_monthly_usd": monthly,
+        "budget_source": budget_source,
+        "spend_field": spend_field,
         "stale": False,
     }
+    if auto is not None:
+        snap["auto_percent_used"] = round(auto, 6)
+    if api is not None:
+        snap["api_percent_used"] = round(api, 6)
+        snap["third_party_percent_used"] = round(api, 6)
+    if spent_ratio is not None:
+        snap["spent_ratio"] = round(spent_ratio, 6)
     if usage.get("on_demand_enabled") is not None:
         snap["on_demand_enabled"] = usage["on_demand_enabled"]
-    # Store auth_source label without expanding secrets; path is OK for local file
-    if auth_source.startswith("state.vscdb:"):
-        snap["auth_source"] = "state.vscdb"
-    else:
-        snap["auth_source"] = auth_source
     return snap
 
 
@@ -338,7 +350,9 @@ def write_budget_local(snap: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "# Auto-generated by scripts/sync_budget.py - do not commit",
-        "# Other Models spend = api_percent_used; Cursor Models = auto_percent_used",
+        "# Weekly Cursor-pool heuristic = auto_percent_used → spent_ratio",
+        "# Third-party / prepaid candidate = api_percent_used (informational)",
+        "# Official docs do not name these JSON fields; see budget_source",
         "",
     ]
     order = [
@@ -349,11 +363,12 @@ def write_budget_local(snap: dict[str, Any], path: Path) -> None:
         "billing_cycle_start",
         "billing_cycle_end",
         "membership_type",
-        "api_percent_used",
+        "budget_source",
+        "spend_field",
         "auto_percent_used",
+        "api_percent_used",
+        "third_party_percent_used",
         "spent_ratio",
-        "remaining_usd",
-        "other_models_monthly_usd",
         "on_demand_enabled",
         "stale",
     ]
@@ -365,7 +380,9 @@ def write_budget_local(snap: dict[str, Any], path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Sync Cursor Other Models usage into budget.local.yaml")
+    parser = argparse.ArgumentParser(
+        description="Sync Cursor weekly-pool usage heuristic into budget.local.yaml"
+    )
     parser.add_argument("--print", dest="print_only", action="store_true", help="Print snapshot JSON, do not write")
     parser.add_argument("--force", action="store_true", help="Reserved; always fetches live usage")
     parser.add_argument(
@@ -393,15 +410,18 @@ def main(argv: list[str] | None = None) -> int:
     snap = build_snapshot(usage, auth_source)
 
     if args.print_only:
+        # Never dump tokens; snapshot has no secrets by construction.
         print(json.dumps(snap, indent=2, ensure_ascii=False))
         return 0
 
     write_budget_local(snap, args.out)
+    spent = snap.get("spent_ratio", "n/a")
     print(
         f"sync_budget: wrote {args.out} "
-        f"api_percent_used={snap['api_percent_used']} "
-        f"spent_ratio={snap['spent_ratio']} "
-        f"remaining_usd={snap['remaining_usd']} "
+        f"budget_source={snap.get('budget_source')} "
+        f"spend_field={snap.get('spend_field')} "
+        f"auto_percent_used={snap.get('auto_percent_used', 'n/a')} "
+        f"spent_ratio={spent} "
         f"source={snap['source']}"
     )
     return 0

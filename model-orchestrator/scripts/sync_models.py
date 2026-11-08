@@ -35,56 +35,25 @@ LOGICAL_SEED = {
         "pool": "cursor",
         "candidates": ["Auto", "Composer 2.5"],
     },
+    "cursor.auto_cost": {
+        "display": "Auto",
+        "pool": "cursor",
+        "candidates": ["Auto"],
+        "notes": "Cost mode only on individual plans; Plus has no Auto → use composer",
+    },
     "cursor.composer": {
         "display": "Composer 2.5",
         "pool": "cursor",
         "candidates": ["Composer 2.5"],
+        "prefer_variant": "standard",
+        "subagent_id": "composer-2.5[fast=false]",
     },
     "cursor.grok_flagship": {
         "display": "Grok 4.7",
         "pool": "cursor",
         "candidates": ["Grok 4.7", "Grok 4.6", "Grok 4.5"],
-    },
-    "other.sonnet_strong": {
-        "display": "Claude Sonnet 5",
-        "pool": "other",
-        "candidates": ["Claude Sonnet 5", "Claude Sonnet 5.5"],
-    },
-    "other.opus": {
-        "display": "Claude Opus 5",
-        "pool": "other",
-        "candidates": ["Claude Opus 5", "Claude Opus 5.5"],
-    },
-    "other.sol": {
-        "display": "GPT-5.6 Sol",
-        "pool": "other",
-        "candidates": ["GPT-5.6 Sol"],
-    },
-    "other.terra": {
-        "display": "GPT-5.6 Terra",
-        "pool": "other",
-        "candidates": ["GPT-5.6 Terra"],
-    },
-    "other.luna": {
-        "display": "GPT-5.6 Luna",
-        "pool": "other",
-        "candidates": ["GPT-5.6 Luna"],
-    },
-    "other.fable": {
-        "display": "Claude Fable 5.1",
-        "pool": "other",
-        "hitl_required": True,
-        "candidates": ["Claude Fable 5.1", "Claude Fable 5"],
-    },
-    "other.gemini_pro": {
-        "display": "Gemini 3.1 Pro",
-        "pool": "other",
-        "candidates": ["Gemini 3.1 Pro"],
-    },
-    "other.gemini_flash": {
-        "display": "Gemini 3.8 Flash",
-        "pool": "other",
-        "candidates": ["Gemini 3.8 Flash"],
+        "prefer_variant": "standard",
+        "subagent_id": "grok-4.7[fast=false]",
     },
 }
 
@@ -143,26 +112,20 @@ def parse_price_rows(text: str) -> list[dict]:
 
 
 def split_pools(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split by provider only. Name prefixes are not proof of the Cursor pool."""
     cursor, other = [], []
     for r in rows:
         prov = r.get("provider", "").lower()
-        name = r.get("name", "")
-        if prov == "cursor" or name.startswith("Grok") or name.startswith("Composer"):
-            cursor.append(
-                {
-                    "name": name,
-                    "input_per_m": r["input_per_m"],
-                    "output_per_m": r["output_per_m"],
-                }
-            )
+        entry = {
+            "name": r["name"],
+            "provider": r.get("provider", ""),
+            "input_per_m": r["input_per_m"],
+            "output_per_m": r["output_per_m"],
+        }
+        if prov == "cursor":
+            cursor.append(entry)
         else:
-            other.append(
-                {
-                    "name": name,
-                    "input_per_m": r["input_per_m"],
-                    "output_per_m": r["output_per_m"],
-                }
-            )
+            other.append(entry)
     return cursor, other
 
 
@@ -229,8 +192,10 @@ def main() -> int:
                 "cursor_models_pool": cursor_pool,
                 "other_models_pool": other_pool,
                 "plan_note": (
-                    "Pro ($20/mo) includes Cursor Models pool + Other Models ~$20 API credit. "
-                    "Auto/Router bills at routed model list price."
+                    "Paid plans include one weekly pool for Cursor models "
+                    "(Grok 4.7/4.6/4.5, Composer 2.5), shared with Grok Bot/apps. "
+                    "Third-party models bill prepaid credit at API list price. "
+                    "Individual plans: Auto Cost only. Prefer standard speed over Fast."
                 ),
             }
             dump_yaml(doc, args.out)

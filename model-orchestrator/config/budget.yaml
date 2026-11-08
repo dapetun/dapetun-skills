@@ -1,15 +1,11 @@
-# Other Models pool budget policy (thresholds — committed)
+# Weekly Cursor-models pool budget policy (thresholds — committed)
 # Spend snapshot: run `python scripts/sync_budget.py` → config/budget.local.yaml (gitignored)
 # Skill prefers budget.local.yaml when fresh (see sync_ttl_minutes); else falls back here.
 
-version: 1
+version: 2
 
-# Display / derived remaining_usd = monthly * (1 - api_percent_used/100)
-# Cursor no longer publishes a stable dollar size for Other Models; 20.0 is Pro heuristic.
-other_models_monthly_usd: 20.0
-
-# Manual fallback when budget.local.yaml is missing (edit or sync)
-remaining_usd: 20.0
+# Official docs: one weekly pool for Grok 4.7/4.6/4.5 + Composer 2.5 (shared with Grok apps).
+# There is no stable dollar size for that pool in public docs — do not invent remaining_usd.
 
 warn_at_ratio: 0.8
 block_hard_other_at_ratio: 0.8
@@ -17,19 +13,23 @@ block_hard_other_at_ratio: 0.8
 # How often the skill should re-run sync_budget.py before classify (minutes)
 sync_ttl_minutes: 60
 
-# Set true after user says «разреши дорогие модели» or `/max force` this billing cycle
+# Prefer auto_percent_used from sync as a heuristic for weekly pool %.
+# Official docs do not name that JSON field. If sync sets budget_source=unknown,
+# skill must show budget=unknown and must not block hard tiers on legacy api%.
+spend_field: unknown
+
+# Set true only after HITL yes for a one-turn third-party pin this session
 hard_other_override: false
 
-updated_at: "2026-10-04"
+updated_at: "2026-11-07"
 notes: >
-  Preferred: python scripts/sync_budget.py (reads local Cursor session → apiPercentUsed).
+  Preferred: python scripts/sync_budget.py (reads local Cursor session).
   Chat: «синхронизируй бюджет» or /budget sync → force sync.
-  Manual: «бюджет remaining 12» → set remaining_usd when sync unavailable.
-  At spent_ratio >= warn_at_ratio → warn + block hard Other unless hard_other_override.
-  At spent_ratio >= 1 or remaining_usd <= 0 → force eco (Cursor Models only).
+  At spent_ratio >= warn_at_ratio (when budget_source is heuristic_auto_percent)
+  → warn + prefer Composer standard unless user completed paid HITL.
+  At spent_ratio >= 1 → force eco (Composer standard only).
+  If budget_source=unknown → do not treat api_percent_used as the weekly pool.
 
 # Manual commands (tell the agent in chat, Russian OK):
 #   «синхронизируй бюджет» / `/budget sync` → run sync_budget.py
-#   «бюджет remaining 12»  → set remaining_usd: 12 (manual fallback)
-#   «разреши дорогие модели» → hard_other_override: true
-#   «сброс бюджета» → remaining_usd back to monthly (new cycle / manual)
+#   «разреши дорогие модели» / `/max force` → HITL for one third-party turn

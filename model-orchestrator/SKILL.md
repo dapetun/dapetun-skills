@@ -1,49 +1,64 @@
 ---
 name: model-orchestrator
 description: >
-  Always-on cost-aware model router for Cursor Pro. Classifies each user prompt
-  with deterministic rules (keywords + project type), recommends a model under
-  the Other Models budget, and prints a short Russian [route] line. Doctrine:
-  Other Models plan in detail; Composer/Grok execute code and file ops. Works
-  standalone (core profile). With stack profile, lean-logs to Hindsight when
-  MCP is available and may hint GitNexus on coding tasks. Use on coding, DS/ML,
-  academic papers, research, frontend, and whenever the user mentions /eco,
-  /max, or /route.
+  Always-on cost-aware model router for Cursor. Classifies each user prompt with
+  deterministic rules (keywords + project type), recommends only included Cursor
+  models (Composer 2.5 standard, Grok 4.7 standard, Auto Cost) under the weekly
+  Cursor-models pool, and prints a short Russian [route] line. Doctrine: Grok
+  plans/analyzes hard work; Composer executes code and file ops. Third-party
+  models need one-turn HITL. Works standalone (core profile). With stack
+  profile, lean-logs to Hindsight when MCP is available and may hint GitNexus
+  on coding tasks. Use on coding, DS/ML, academic papers, research, frontend,
+  and whenever the user mentions /eco, /max, or /route.
 ---
 
-# Model Orchestrator (v0.2 — recommend only)
+# Model Orchestrator (v1 — Cursor models only)
 
 ## Mission
 
-Protect Cursor Pro **Other Models** (~$20) from trivia **and** from writing code.
-Strong Other models **plan** (detailed briefs a weaker agent can follow).
-**Composer 2.5 / Grok 4.7** **execute** (read files, write/edit code, routine tools).
+Protect the **weekly Cursor models pool** (Composer 2.5, Grok 4.7 / 4.6 / 4.5;
+shared with Grok Bot and Grok apps) from Fast-tier burn and from third-party
+prepaid credit.
 
-Overlay on Auto/Router; do not replace Auto for routine work.
+**Grok 4.7 standard** **plans / analyzes** hard work.
+**Composer 2.5 standard** **executes** (read files, write/edit code, routine tools).
+**Auto Cost** covers routine when the plan offers Auto (Plus has no Auto → Composer).
+
+Overlay on Auto Cost; do not recommend Balance / Intelligence (Teams/Enterprise
+only; may route to third-party).
 
 User-facing language: **Russian**. This skill's instructions: **English**.
 
-## Doctrine: planner → executor
+## Doctrine: planner → executor (Cursor pool)
 
 Canonical source: `doctrine` + `phases` in `routes.yaml`.
 
 | Role (`роль=`) | Who | Does |
 | --- | --- | --- |
-| `план` | Other (Sonnet/Opus/Sol) or Grok if exhausted | Detailed plan, specs, architecture, science Q&A prose |
-| `код` | Composer 2.5 (default) or Grok 4.7 | File reads/writes, patches, routine agent work |
-| `анализ` | Other (science/paper Q&A) | Interpret results / write prose — **not** code edits |
+| `план` | Grok 4.7 standard (eco → Composer) | Detailed plan, specs, architecture |
+| `код` | Composer 2.5 standard | File reads/writes, patches, routine agent work |
+| `анализ` | Grok 4.7 standard (eco → Composer) | Interpret results / write prose — **not** code edits |
 
-**Hard rule:** Never recommend Other Models for writing code, applying patches, or bulk file edits — even on hard tiers. If the user asks to implement now, set `роль=код` and recommend Composer (or Grok for UI / Cursor-only quality).
+**Hard rules:**
+
+- Never put Claude, GPT, Gemini, Muse, Fable, or other third-party models in the
+  routing matrix.
+- Never recommend Fast or Grok 500k unless the user explicitly asked.
+- Never recommend third-party for writing code. If the user asks to implement
+  now, set `роль=код` and recommend Composer 2.5 standard (не Fast).
 
 ### Phase detection (after tier)
 
-1. Explicit pin («используй Opus», «только Composer») wins.
-2. `force_execute_if` keywords → `роль=код` → use `executor_logical[mode]`.
-3. `force_plan_if` keywords → `роль=план` → use `logical_model[mode]`.
-4. Else if tier in `always_execute_tiers` → `роль=код`.
-5. Else if tier in `default_plan_tiers` and no approved plan in thread → `роль=план`.
-6. Else if tier in `analyze_tiers` and prompt is Q&A (no «напиши код» / «реализуй») → `роль=анализ`.
-7. Else if user said «реализуй» / approved a prior plan → `роль=код`.
+1. Explicit Cursor pin («только Composer», «Grok», named Cursor model) wins;
+   still prefer **standard** unless they asked Fast / 500k.
+2. Explicit **third-party** pin or paid phrase → **HITL** (see below); do not
+   continue the matrix until yes/no.
+3. `force_execute_if` keywords → `роль=код` → use `executor_logical[mode]`.
+4. `force_plan_if` keywords → `роль=план` → use `logical_model[mode]`.
+5. Else if tier in `always_execute_tiers` → `роль=код`.
+6. Else if tier in `default_plan_tiers` and no approved plan in thread → `роль=план`.
+7. Else if tier in `analyze_tiers` and prompt is Q&A (no «напиши код» / «реализуй») → `роль=анализ`.
+8. Else if user said «реализуй» / approved a prior plan → `роль=код`.
 
 ### Planner output contract (when `роль=план`)
 
@@ -56,12 +71,21 @@ Plan must be **Composer-ready** in Russian (or bilingual if user asks EN):
 - Risks / what not to change
 - End with handoff from `doctrine.handoff_ru`
 
-Do **not** apply file edits while recommending Other as the chat model.
+Do **not** apply file edits while recommending Grok as the chat model for plan.
 
 ### Executor handoff (`роль=код`)
 
-In `действие`: «переключи на Composer 2.5 (или Grok) и выполни план».
+In `действие`: «переключи на Composer 2.5 standard (не Fast) и выполни план».
 If no plan exists yet on a hard tier, first recommend `роль=план` unless user forced execute.
+
+### Subagents (spawn still off by default)
+
+Recommend-only: do **not** spawn. If the user explicitly asks to spawn:
+
+- Pin `composer-2.5[fast=false]`, or `inherit` when the parent is already on
+  Composer / Grok standard.
+- Never pass a third-party model id to Task (bills prepaid credit even if the
+  picker shows Auto / Grok / Composer).
 
 ## Config locations
 
@@ -92,49 +116,50 @@ Read `hindsight.enabled` / `gitnexus.enabled` from that file. Missing file → t
 2. Print **one** Russian `[route]` block at the start of the reply (before plan). Machine fields `tier`, `model`, `mode`, `pool`, `budget`, `shape`, `роль` are required every turn.
 3. **Integrations (soft):** Hindsight retain and GitNexus hints — see below. Never fail the turn if tools are absent.
 4. Continue per role: planner elaborates; executor implements after approve / model switch.
-5. **v0.2:** do not spawn subagents; tell the user to switch the chat model if needed. Plan-shape / splitter text is a hint only.
+5. Do not spawn subagents; tell the user to switch the chat model if needed. Plan-shape / splitter text is a hint only.
 
 ### Route line format (Russian)
 
 ```text
-[route] project=<type> tier=<tier> model=<display> mode=<eco|balance|max> pool=<cursor|other|mixed> budget=<ok|warn|exhausted> shape=<none|mapper|specialist|pipeline|hybrid> роль=<план|код|анализ>
+[route] project=<type> tier=<tier> model=<display> mode=<eco|balance|max> pool=<cursor|paid> budget=<ok|warn|exhausted|unknown> shape=<none|mapper|specialist|pipeline|hybrid> роль=<план|код|анализ>
 почему: <≤120 chars>
-действие: <переключи модель чата на … · план → approve · handoff на Composer · optional shape/roles hint>
+действие: <переключи модель чата на … · план → approve · handoff на Composer standard · optional shape/roles hint>
 ```
 
-- `pool`: `cursor` on eco/exhausted/hard-block; else tier pool (`other` / `cursor` / `mixed`).
-- `budget`: `ok` if remaining OK and under warn ratio; `warn` at hard-block@warn_ratio; `exhausted` if `remaining_usd<=0`. `/eco` alone does not force `exhausted`.
+- `pool`: `cursor` for matrix routes; `paid` only after HITL yes on a third-party pin (one turn).
+- `budget`: `ok` if remaining OK and under warn ratio; `warn` at hard-block@warn_ratio; `exhausted` if pool spent; `unknown` if sync has no confirmed weekly-pool field.
 - `shape`: from `plan_shapes.by_tier` in `routes.yaml` (default `none`). If `shape != none` and `splitter_hint: true`, add one RU hint in `действие` naming roles that *would* fire — **never spawn**.
 - `роль`: `план` | `код` | `анализ` (see doctrine).
-- `model`: for `план`/`анализ` use `logical_model[mode]`; for `код` use `executor_logical[mode]` when present, else Cursor default (Composer).
+- `model`: for `план`/`анализ` use `logical_model[mode]`; for `код` use `executor_logical[mode]` when present, else Composer standard. Display names must say **standard / не Fast** when recommending Composer or Grok.
 
 If `/route` only: print the block and **stop**.
 
 ## Precedence (highest wins)
 
-1. Explicit user model pin («используй Opus», «только Composer», named model)
-2. Slash mode `/eco` or `/max` (sets mode; still classify tier). `/max force` or «разреши дорогие модели» sets hard-other override for this turn.
-3. Prompt tags `@ds` `@paper` `@web`
-4. `projects.yaml` path prefix / path_contains
-5. Repo marker heuristics from `projects.yaml`
-6. Keyword classifier (see below + `docs/classifier.md` in repo)
-7. Default → `default_code` / Auto overlay
+1. Explicit **third-party** pin or paid override → HITL (one turn if yes)
+2. Explicit Cursor model pin («только Composer», «Grok», named Cursor model) — still standard unless Fast/500k asked
+3. Slash mode `/eco` or `/max` (sets mode; still classify tier)
+4. Prompt tags `@ds` `@paper` `@web`
+5. `projects.yaml` path prefix / path_contains
+6. Repo marker heuristics from `projects.yaml`
+7. Keyword classifier (see below)
+8. Default → `default_code` / Auto Cost overlay
 
 ## Modes
 
 | Mode | Behavior |
 | --- | --- |
-| `eco` | Cursor Models only. No Other Models, Fable, best-of-N, cascade. Planner→Grok; executor→Composer/Grok per matrix. |
-| `balance` | Default. Auto/Composer for routine execute; Other for plan/analyze on hard tiers. |
-| `max` | Stronger Other planners if budget allows. Execution still Composer/Grok. |
+| `eco` | Composer 2.5 standard only (all tiers). Stretches the weekly pool. |
+| `balance` | Default. Auto Cost / Composer for routine; Grok standard for hard plan/analyze; Composer for code. |
+| `max` | Grok 4.7 standard for hard plan **and** heavy execute. Still no Fast, no third-party. |
 
 Detect `/eco` `/max` in the user message. Default mode = `balance`.
 
 ## Budget guard (sync + policy)
 
-**Policy** (thresholds): `<root>/config/budget.yaml` — `warn_at_ratio`, `hard_other_override`, `other_models_monthly_usd`, `sync_ttl_minutes`.
+**Policy** (thresholds): `<root>/config/budget.yaml` — `warn_at_ratio`, `sync_ttl_minutes`, weekly-pool notes.
 
-**Live spend** (preferred): `<root>/config/budget.local.yaml` from `python <root>/scripts/sync_budget.py` (Other Models = `api_percent_used`). The script reads the local Cursor session and writes that file. Never print the session token, and never put it in `[route]` or Hindsight.
+**Live spend** (preferred): `<root>/config/budget.local.yaml` from `python <root>/scripts/sync_budget.py`. Prefer a confirmed **weekly Cursor-pool** percent field. Never print the session token, and never put it in `[route]` or Hindsight.
 
 ### Before classify (each turn)
 
@@ -142,34 +167,32 @@ Detect `/eco` `/max` in the user message. Default mode = `balance`.
 2. Else if `budget.local.yaml` missing **or** `synced_at` older than `sync_ttl_minutes` (default 60) → run:
    `python <root>/scripts/sync_budget.py` (cwd = orchestrator root). Soft-fail if the script is missing or it errors.
 3. Resolve spend:
-   - **Synced/fresh local:** `spent_ratio = api_percent_used / 100` (clamp display; use local `spent_ratio` if present). `remaining_usd` from local when present.
+   - **Synced/fresh local with confirmed pool field:** `spent_ratio` from that field / 100.
    - **Stale local** (sync failed, file kept): use last local values; mention `budget_source=stale` in `почему`.
-   - **No local ever:** `spent_ratio = 1 - remaining_usd / other_models_monthly_usd` from `budget.yaml` (manual).
+   - **No confirmed field / `spend_field: unknown`:** `budget=unknown`; do **not** block hard tiers using legacy `api_percent_used` as if it were the weekly pool.
 4. Never log or retain session tokens. Never put tokens in `[route]` or Hindsight.
 
 ### Guard rules
 
-- **Cursor-only triggers** (same matrix): `spent_ratio >= 1` / `remaining_usd <= 0`, mode `/eco`, or `spent_ratio >= warn_at_ratio` without `hard_other_override`.
-- On those triggers: resolve **`logical_model.eco`** / `exhausted_policy.matrix` — never recommend Other Models.
-- Hard tiers: `science_stats`, `refactor_architecture`, `long_agent`, `parallel_roles`, `paper` (when mapped to Other for plan/analyze).
-- Manual fallback: «бюджет remaining N» → treat remaining as N this session and ask to edit `budget.yaml` if sync unavailable.
+- **Composer-only triggers:** pool exhausted, mode `/eco`, or `spent_ratio >= warn_at_ratio` without paid HITL override.
+- On those triggers: resolve **`logical_model.eco`** / `exhausted_policy.matrix` — Composer standard only.
+- Hard tiers: `science_stats`, `refactor_architecture`, `long_agent`, `parallel_roles`, `paper`, `frontend_design`.
 
 ### Exhausted / eco matrix (bind to YAML)
 
 | Tier | Model | Warning |
 | --- | --- | --- |
-| quick_edit, research_docs, cursor_meta, docs_office | Composer 2.5 | docs_office academic → paper row |
-| default_code | Auto / Composer 2.5 | none |
-| frontend_design, paper, science_stats, refactor_architecture, long_agent | Grok 4.7 | use `exhausted_policy.warnings_ru` |
-| parallel_roles | `role_map_exhausted` | planner/reviewer/… → Grok; coder → Composer |
+| quick_edit, research_docs, cursor_meta, docs_office, default_code | Composer 2.5 standard | docs_office academic → paper row |
+| frontend_design, paper, science_stats, refactor_architecture, long_agent | Composer 2.5 standard | use `exhausted_policy.warnings_ru` |
+| parallel_roles | `role_map_exhausted` | all roles → Composer |
 
-**Mandatory RU for science_stats on Cursor-only** (in `почему` / `действие`):
+**Mandatory RU for science_stats on eco / tight pool** (in `почему` / `действие`):
 
 ```text
-Other Models недоступен — нет Sonnet/Opus; ответ на Grok. Перепроверь цифры и выводы.
+Недельный пул Cursor / eco — ответ на Composer 2.5 standard. Перепроверь цифры и выводы.
 ```
 
-**Display:** `mode=eco` and/or `budget=warn|exhausted` + `pool=cursor` + Cursor display name only.
+**Display:** `mode=eco` and/or `budget=warn|exhausted|unknown` + `pool=cursor` + Cursor display name only (matrix).
 
 ## Plan shapes (hints only)
 
@@ -182,13 +205,18 @@ Read `plan_shapes` from `routes.yaml`. Defaults if missing: `shape=none`, no spa
 | long_agent | hybrid | роли: planner→coder→reviewer — не спавню |
 | science_stats, quick_edit, … | none | (omit roles line) |
 
-## HITL — Fable
+## HITL — third-party / paid (one turn)
 
-**Never** recommend or use Claude Fable without an explicit Russian yes/no confirmation first.
+**Never** recommend or run a third-party model from the matrix.
 
-Use confirm copy from `routes.yaml` `hitl.confirm_prompt_ru` (or: «Рекомендую Claude Fable (дорого). Подтвердить? да/нет»).
+When the user **explicitly** names a third-party model (Claude / GPT / Gemini / Muse / Fable / …)
+or says «разреши дорогие модели» / `/max force`:
 
-Opus / Sol may be recommended as **planners** on hard tiers without HITL when budget allows and hard-block is off — still not for writing code.
+1. Ask yes/no with `hitl.confirm_prompt_ru` (add `confirm_prompt_fable_extra_ru` for Fable).
+2. **да** → one turn only: `pool=paid`, named model in `model=`, then next turn returns to the Cursor matrix.
+3. **нет** → fall back to the Cursor matrix for this turn.
+
+Do not silently map a third-party name onto Composer/Grok.
 
 ## Project type
 
@@ -238,16 +266,18 @@ Score keywords (RU+EN). If several match, pick **highest severity**:
 If prompt clearly combines paper + stats + code (or similar):
 
 - State that decomposition is recommended; list 2–3 role routes; pick the **highest severity** tier for the primary `[route]` line.
-- Plan/analyze on Other; code path always Composer.
+- Plan/analyze on Grok; code path always Composer.
 
 ### Resolve logical → display
 
 Map through `models.generated.yaml` `logical.*.display` (first available candidate):
 
 - `роль=план|анализ` → `logical_model[mode]`
-- `роль=код` → `executor_logical[mode]` if present, else Composer / Auto
+- `роль=код` → `executor_logical[mode]` if present, else Composer standard
 
-Science/stats **analyze** when Other allowed: never Composer-only for the answer. Science/stats **code**: plan on Sonnet/Opus, execute on Composer.
+Append **standard / не Fast** in `действие` for Composer and Grok recommendations.
+
+Science/stats **analyze** when pool OK: prefer Grok, not Composer-only. Science/stats **code**: plan on Grok, execute on Composer. Eco / tight pool: Composer + mandatory science warning.
 
 ## Hindsight logging (anti-spam, stack only)
 
@@ -259,7 +289,7 @@ Science/stats **analyze** when Other allowed: never Composer-only for the answer
 Content template (English keys OK inside text):
 
 ```text
-orchestrator_route task_type=<tier> tier=<tier> model=<display> logical=<key> reason=<why≤120> mode=<mode> project_type=<type> pool=<cursor|other|mixed> budget=<ok|warn|exhausted> shape=<none|mapper|specialist|pipeline|hybrid> role=<plan|execute|analyze>
+orchestrator_route task_type=<tier> tier=<tier> model=<display> logical=<key> reason=<why≤120> mode=<mode> project_type=<type> pool=<cursor|paid> budget=<ok|warn|exhausted|unknown> shape=<none|mapper|specialist|pipeline|hybrid> role=<plan|execute|analyze>
 ```
 
 - `document_id`: `cursor-model-orchestrator-route-log-YYYY-MM` (UTC month)
@@ -275,28 +305,27 @@ On coding-related tiers (`default_code`, `refactor_architecture`, `long_agent`, 
 ## Slash commands
 
 - `/eco` — force eco mode for this turn
-- `/max` — force max mode for this turn
+- `/max` — force max mode for this turn (Grok standard on hard work; still no third-party)
 - `/route` — classify, print `[route]`, stop
-- `/max force` — max mode + treat hard_other_override as true this turn
+- `/max force` — paid-override phrase → HITL for one third-party turn (not a silent matrix upgrade)
 - `/budget sync` — run `python <root>/scripts/sync_budget.py` then classify (or stop after sync if user only asked sync)
 
 ## Hard rules
 
-1. Never select Fable without HITL confirmation.
-2. Never spend Other Models in `/eco` or when budget exhausted (`api_percent_used` ≥ 100% / spent_ratio ≥ 1).
-3. Never skip the Russian `[route]` line (include `роль=`).
-4. Never recommend Other Models for writing/editing code or applying patches.
+1. Never select a third-party model without HITL confirmation; yes = one turn only.
+2. Never recommend Fast or Grok 500k unless the user asked.
+3. Never recommend third-party models from the matrix, including in `/eco` or when budget is exhausted/unknown.
+4. Never skip the Russian `[route]` line (include `роль=`).
 5. Prefer synced `budget.local.yaml`; refresh when stale; never expose Cursor session tokens.
 6. Recommend only — no cascade execution, no best-of-N runs, no mid-chat model mutation, no subagent spawn (shape/splitter are hints).
 7. Prefer plan → approve → Composer execute before large edits.
-8. Bash is not a separate tier; route like normal code (executor = Composer).
+8. Bash is not a separate tier; route like normal code (executor = Composer standard).
 
 ## Embedded fallback (if YAML missing)
 
-- eco/execute routine → Composer 2.5 / Auto
-- eco plan/quality → Grok 4.7 + warnings
-- science_stats / paper analyze (budget OK) → Claude Sonnet 5
-- refactor / long_agent **plan** (budget OK) → Claude Opus 5; **execute** → Composer 2.5
-- frontend **plan** → Sonnet; **execute** → Grok 4.7
-- max hard planner → GPT-5.6 Sol or Claude Opus 5
-- Fable → ask first
+- eco / tight pool → Composer 2.5 standard (не Fast)
+- routine balance → Auto Cost, else Composer 2.5 standard
+- science_stats / paper / refactor / long_agent **plan|анализ** (pool OK) → Grok 4.7 standard
+- same tiers **код** → Composer 2.5 standard
+- max hard plan/execute → Grok 4.7 standard (не Fast, не xhigh as a price lever)
+- third-party name → ask yes/no for one paid turn
